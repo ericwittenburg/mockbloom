@@ -1,0 +1,1743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MockBloom</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0a0b;
+  --surface-1: #141416;
+  --surface-2: #1c1c1f;
+  --surface-3: #242428;
+  --border: #2a2a2f;
+  --border-light: #38383f;
+  --text: #f5f5f7;
+  --text-2: #a1a1a6;
+  --text-3: #6e6e73;
+  --accent: #ff6b6b;
+  --accent-2: #ff8a5c;
+  --accent-grad: linear-gradient(135deg, #ff6b6b, #ff8a5c);
+  --success: #34d399;
+  --danger: #ff4757;
+  --r: 12px;
+  --r-sm: 8px;
+}
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Inter', system-ui, sans-serif; height: 100vh; overflow: hidden; color: var(--text); background: var(--bg); display: flex; flex-direction: column; }
+
+/* ── Top bar ── */
+#topBar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px; height: 56px; min-height: 56px;
+  background: var(--surface-1); border-bottom: 1px solid var(--border);
+}
+.brand {
+  font-size: 22px; font-weight: 800; letter-spacing: -0.5px;
+  background: var(--accent-grad); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+.brand-tag { font-size: 12px; color: var(--text-3); margin-left: 12px; font-weight: 400; }
+#generateBtn {
+  padding: 10px 28px; border: none; border-radius: 50px; font-size: 13px; font-weight: 700;
+  cursor: pointer; font-family: inherit; transition: all 0.25s ease;
+  background: var(--accent-grad); color: #fff; letter-spacing: 0.2px;
+  box-shadow: 0 2px 12px rgba(255,107,107,0.2);
+}
+#generateBtn:hover { box-shadow: 0 4px 24px rgba(255,107,107,0.4); transform: translateY(-1px); }
+#generateBtn:disabled { background: var(--surface-3); color: var(--text-3); cursor: not-allowed; box-shadow: none; transform: none; }
+
+/* ── Workspace ── */
+#workspace { display: flex; flex: 1; overflow: hidden; }
+
+/* ── Sidebar ── */
+#sidebar {
+  width: 300px; min-width: 300px; background: var(--surface-1); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.panel-section { padding: 20px; border-bottom: 1px solid var(--border); }
+.section-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 12px; letter-spacing: -0.2px; }
+
+/* ── Design upload ── */
+.drop-zone {
+  border: 2px dashed var(--border-light); border-radius: var(--r); padding: 24px 16px;
+  text-align: center; cursor: pointer; transition: all 0.2s ease;
+  color: var(--text-3); font-size: 13px; line-height: 1.6; position: relative;
+}
+.drop-zone .drop-icon {
+  display: block; margin: 0 auto 8px; width: 32px; height: 32px; opacity: 0.4;
+}
+.drop-zone:hover, .drop-zone.dragover { border-color: var(--accent); background: rgba(255,107,107,0.04); color: var(--accent); }
+.drop-zone:hover .drop-icon, .drop-zone.dragover .drop-icon { opacity: 0.8; }
+.drop-zone.has-file {
+  border-style: solid; border-color: var(--success); background: rgba(52,211,153,0.06);
+  color: var(--success); padding: 12px 16px; display: flex; align-items: center; gap: 12px; text-align: left;
+}
+.drop-zone.has-file .drop-icon { display: none; }
+.design-thumb { width: 48px; height: 48px; object-fit: contain; border-radius: 6px; background: var(--surface-3); flex-shrink: 0; }
+.design-file-info { overflow: hidden; }
+.design-file-name { font-size: 12px; font-weight: 600; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.design-file-hint { font-size: 11px; opacity: 0.7; }
+.design-remove { margin-left: auto; flex-shrink: 0; background: none; border: none; color: var(--success); opacity: 0.6; cursor: pointer; font-size: 20px; line-height: 1; padding: 0 2px; transition: opacity 0.15s; }
+.design-remove:hover { opacity: 1; color: var(--danger); }
+.drop-zone-sm { padding: 14px 12px; font-size: 12px; }
+.drop-zone-sm .drop-icon { width: 20px; height: 20px; margin-bottom: 4px; }
+
+/* ── Tabs ── */
+.panel-tabs { flex: 1; display: flex; flex-direction: column; overflow: hidden; border-bottom: none; }
+.tab-bar {
+  display: flex; gap: 4px; padding: 0 20px; padding-top: 16px; padding-bottom: 12px;
+  border-bottom: 1px solid var(--border); background: var(--surface-1); flex-shrink: 0;
+}
+.tab-btn {
+  flex: 1; padding: 8px 0; border: none; border-radius: 8px; font-size: 12px; font-weight: 600;
+  cursor: pointer; font-family: inherit; transition: all 0.15s ease;
+  background: transparent; color: var(--text-3);
+}
+.tab-btn:hover { color: var(--text-2); background: var(--surface-2); }
+.tab-btn.active { background: var(--accent-grad); color: #fff; }
+.tab-pane { display: none; flex: 1; overflow-y: auto; padding: 16px 20px; contain: layout style; }
+.tab-pane.active { display: flex; flex-direction: column; gap: 12px; }
+
+/* ── Design side toggle ── */
+.section-title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.section-title-row .section-title { margin-bottom: 0; }
+.side-toggle { display: flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 2px; gap: 2px; }
+.side-btn { background: none; border: none; color: var(--text-2); font: 11px 'Inter', sans-serif; font-weight: 600; padding: 4px 10px; border-radius: 6px; cursor: pointer; transition: background 0.15s, color 0.15s; white-space: nowrap; }
+.side-btn.active { background: var(--surface-3); color: var(--text); }
+
+/* ── Sync section ── */
+.sync-section { border-bottom: none; margin-top: auto; border-top: 1px solid var(--border); }
+.sync-row { display: flex; gap: 8px; margin-bottom: 8px; }
+.sync-btn { flex: 1; justify-content: center; padding: 8px 10px; font-size: 12px; }
+
+/* ── Upload progress ── */
+@keyframes spin { to { transform: rotate(360deg); } }
+.upload-progress {
+  display: none; align-items: center; gap: 10px;
+  padding: 10px 4px; color: var(--text-2); font-size: 12px;
+}
+.upload-progress.visible { display: flex; }
+.upload-spinner {
+  width: 16px; height: 16px; flex-shrink: 0; border-radius: 50%;
+  border: 2px solid var(--border-light); border-top-color: var(--accent);
+  animation: spin 0.7s linear infinite;
+}
+
+/* ── Search bar ── */
+.search-bar { position: relative; flex-shrink: 0; }
+.search-bar svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-3); pointer-events: none; }
+.search-bar input {
+  width: 100%; box-sizing: border-box;
+  background: var(--surface-2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 8px;
+  padding: 8px 12px 8px 32px; font: 13px 'Inter', sans-serif;
+  outline: none; transition: border-color 0.15s;
+}
+.search-bar input::placeholder { color: var(--text-3); }
+.search-bar input:focus { border-color: var(--accent); }
+
+/* ── Swatch grid ── */
+.swatch-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+}
+.swatch {
+  width: auto; height: 48px; border-radius: 8px; cursor: pointer;
+  border: 2px solid transparent; overflow: hidden; position: relative;
+  transition: box-shadow 0.1s ease;
+}
+.swatch:hover { box-shadow: 0 0 0 2px rgba(255,255,255,0.2); }
+.swatch.selected { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(255,107,107,0.25); }
+.swatch img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.swatch .x-btn {
+  position: absolute; top: -4px; right: -4px; width: 18px; height: 18px;
+  background: var(--danger); color: #fff; border: 2px solid var(--surface-1); border-radius: 50%;
+  font-size: 10px; cursor: pointer; display: none; line-height: 14px; text-align: center; padding: 0;
+}
+.swatch:hover .x-btn { display: block; }
+
+/* ── Selection controls ── */
+.info-row { display: flex; align-items: center; justify-content: space-between; }
+.info-text { font-size: 11px; color: var(--text-3); }
+.select-controls { display: flex; gap: 4px; }
+.select-controls button {
+  font-size: 10px; padding: 4px 10px; background: var(--surface-3); border: none;
+  border-radius: 6px; cursor: pointer; color: var(--text-2); transition: all 0.15s; font-family: inherit;
+}
+.select-controls button:hover { color: var(--accent); background: rgba(255,107,107,0.1); }
+
+/* ── Label list ── */
+.label-list { display: flex; flex-direction: column; gap: 2px; }
+.label-item {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--r-sm);
+  cursor: pointer; transition: all 0.15s ease; border-left: 3px solid transparent;
+}
+.label-item:hover { background: var(--surface-2); }
+.label-item.active { background: rgba(255,107,107,0.06); border-left-color: var(--accent); }
+.label-item img { width: 32px; height: 32px; object-fit: contain; border-radius: 6px; background: var(--surface-3); }
+.label-item span { font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.label-item .x-lbl { background: none; border: none; color: var(--text-3); cursor: pointer; font-size: 16px; padding: 0 2px; transition: color 0.15s; }
+.label-item .x-lbl:hover { color: var(--danger); }
+
+/* ── Main area ── */
+#main { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
+
+/* ── Canvas area ── */
+#canvasArea {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  padding: 24px; overflow: hidden; position: relative;
+  background: radial-gradient(ellipse at 50% 40%, #1a1a1f 0%, var(--bg) 65%);
+}
+#previewCanvas { border-radius: 6px; cursor: default; box-shadow: 0 12px 48px rgba(0,0,0,0.5); }
+
+/* ── Floating toolbar ── */
+#toolbar {
+  position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 12px; padding: 10px 18px;
+  background: rgba(28,28,31,0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border); border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
+}
+#previewCanvas:not(.hidden) ~ #toolbar { opacity: 1; pointer-events: auto; }
+#toolbar button {
+  padding: 6px 12px; background: var(--surface-3); border: none; border-radius: 8px;
+  cursor: pointer; font-size: 11px; font-weight: 600; color: var(--text-2);
+  transition: all 0.15s; font-family: inherit;
+}
+#toolbar button:hover { background: rgba(255,107,107,0.15); color: var(--accent); }
+.toolbar-sep { width: 1px; height: 20px; background: var(--border); flex-shrink: 0; }
+.opacity-control { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-2); }
+.opacity-control input[type=range] {
+  -webkit-appearance: none; appearance: none; width: 72px; height: 4px;
+  cursor: pointer; background: var(--border-light); border-radius: 2px; outline: none;
+}
+.opacity-control input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--accent); cursor: pointer; border: 2px solid var(--surface-2);
+  box-shadow: 0 0 8px rgba(255,107,107,0.3);
+}
+.opacity-control input[type=range]::-moz-range-thumb {
+  width: 14px; height: 14px; border-radius: 50%; background: var(--accent);
+  cursor: pointer; border: 2px solid var(--surface-2);
+}
+.opacity-control .opacity-val { min-width: 30px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text-3); font-size: 10px; }
+#toolbarInfo { font-size: 10px; color: var(--text-3); white-space: nowrap; }
+
+/* ── Empty state ── */
+.empty-state { text-align: center; padding: 60px 40px; position: relative; }
+.empty-state::before {
+  content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -55%);
+  width: 260px; height: 260px;
+  background: radial-gradient(circle, rgba(255,107,107,0.07) 0%, rgba(255,138,92,0.03) 40%, transparent 70%);
+  border-radius: 50%; pointer-events: none;
+}
+.empty-bloom {
+  width: 64px; height: 64px; margin: 0 auto 20px; border-radius: 20px;
+  background: var(--accent-grad); opacity: 0.15;
+  animation: bloom-pulse 3s ease-in-out infinite;
+}
+@keyframes bloom-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.15; }
+  50% { transform: scale(1.1); opacity: 0.25; }
+}
+.empty-state h2 { font-size: 22px; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.3px; }
+.empty-state p { font-size: 14px; color: var(--text-3); line-height: 1.6; max-width: 320px; margin: 0 auto; }
+
+/* ── Mockup results ── */
+#mockupGrid { flex: 1; overflow-y: auto; padding: 24px; background: var(--bg); }
+.mockup-toolbar { display: flex; gap: 12px; margin-bottom: 24px; align-items: center; flex-wrap: wrap; }
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 10px 18px; border: none; border-radius: 10px;
+  cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.2s ease; font-family: inherit;
+}
+.btn-secondary { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+.btn-secondary:hover { background: var(--surface-3); border-color: var(--border-light); }
+.btn-primary { background: var(--accent-grad); color: #fff; }
+.btn-primary:hover { box-shadow: 0 4px 16px rgba(255,107,107,0.3); }
+.mockup-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+.mockup-card {
+  border: 1px solid var(--border); border-radius: var(--r); overflow: hidden;
+  background: var(--surface-2); transition: all 0.25s ease;
+}
+.mockup-card:hover { transform: translateY(-4px); box-shadow: 0 12px 32px rgba(0,0,0,0.4); border-color: var(--border-light); }
+.mockup-card img { width: 100%; display: block; }
+.mockup-card-footer { padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; }
+.mockup-card-footer span { font-size: 13px; font-weight: 600; }
+.mockup-card-footer button {
+  padding: 7px 16px; background: var(--accent-grad); color: #fff; border: none; border-radius: 8px;
+  cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s; font-family: inherit;
+}
+.mockup-card-footer button:hover { box-shadow: 0 4px 12px rgba(255,107,107,0.3); }
+#genInfo { margin-left: auto; font-size: 12px; color: var(--text-3); }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
+
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div id="topBar">
+  <div style="display:flex;align-items:baseline">
+    <span class="brand">MockBloom</span>
+    <span class="brand-tag">mockup studio</span>
+  </div>
+  <button id="generateBtn" disabled>Generate Mockups</button>
+</div>
+
+<!-- Workspace -->
+<div id="workspace">
+
+<!-- Sidebar -->
+<div id="sidebar">
+
+  <!-- Design upload -->
+  <div class="panel-section">
+    <div class="section-title-row">
+      <div class="section-title">Design</div>
+      <div class="side-toggle">
+        <button class="side-btn active" id="frontSideBtn">Front</button>
+        <button class="side-btn" id="backSideBtn">Back</button>
+      </div>
+    </div>
+    <div class="drop-zone" id="designDrop">
+      <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Drop your design here<br><span style="opacity:0.6;font-size:11px">or click to browse</span>
+    </div>
+    <input type="file" id="designInput" accept="image/png" style="display:none">
+  </div>
+
+  <!-- Tabbed assets -->
+  <div class="panel-section panel-tabs">
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="tabTemplates">Shirts</button>
+      <button class="tab-btn" id="labelsTabBtn" data-tab="tabLabels">Labels</button>
+      <button class="tab-btn" data-tab="tabBgs">Backgrounds</button>
+    </div>
+
+    <!-- Templates tab -->
+    <div class="tab-pane active" id="tabTemplates">
+      <div class="search-bar">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="templateSearch" placeholder="Search colors…" autocomplete="off">
+      </div>
+      <div class="swatch-grid" id="templateGrid"></div>
+      <div class="upload-progress" id="uploadProgress">
+        <div class="upload-spinner"></div>
+        <span id="uploadProgressText"></span>
+      </div>
+      <div class="info-row">
+        <span class="info-text" id="selectionCount"></span>
+        <div class="select-controls" id="selectControls" style="display:none">
+          <button id="selectAllBtn">All</button>
+          <button id="deselectAllBtn">None</button>
+        </div>
+      </div>
+      <div class="drop-zone drop-zone-sm" id="templateDrop">
+        <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <span id="templateDropLabel">Drop shirt templates or click to upload</span>
+      </div>
+      <input type="file" id="templateInput" accept="image/png" multiple style="display:none">
+    </div>
+
+    <!-- Labels tab -->
+    <div class="tab-pane" id="tabLabels">
+      <div class="label-list" id="labelList"></div>
+      <div class="drop-zone drop-zone-sm" id="labelDrop">
+        <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Drop label PNG or click to upload
+      </div>
+      <input type="file" id="labelInput" accept="image/png" style="display:none">
+    </div>
+
+    <!-- Backgrounds tab -->
+    <div class="tab-pane" id="tabBgs">
+      <div class="swatch-grid" id="bgGrid"></div>
+      <span class="info-text" id="bgInfo"></span>
+      <div class="drop-zone drop-zone-sm" id="bgDrop">
+        <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Drop backgrounds or click to upload
+      </div>
+      <input type="file" id="bgInput" accept="image/png,image/jpeg" multiple style="display:none">
+    </div>
+  </div>
+
+  <!-- Sync -->
+  <div class="panel-section sync-section">
+    <div class="section-title">Sync</div>
+    <div class="sync-row">
+      <button class="btn btn-secondary sync-btn" id="exportBtn">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export
+      </button>
+      <button class="btn btn-secondary sync-btn" id="importBtn">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Import
+      </button>
+    </div>
+    <span class="info-text" id="syncStatus"></span>
+    <input type="file" id="importInput" accept=".json" style="display:none">
+  </div>
+</div>
+
+<!-- Main -->
+<div id="main">
+  <div id="canvasArea">
+    <div class="empty-state" id="emptyState">
+      <div class="empty-bloom"></div>
+      <h2>Ready to bloom</h2>
+      <p>Upload a design and select shirt templates to start creating mockups</p>
+    </div>
+    <canvas id="previewCanvas" class="hidden"></canvas>
+    <div id="toolbar">
+      <button id="resetPosBtn">Reset Position</button>
+      <button id="resetSizeBtn">Reset Size</button>
+      <div class="toolbar-sep"></div>
+      <label class="opacity-control"><span>Design</span><input type="range" id="designOpacity" min="0" max="100" value="85"><span class="opacity-val" id="designOpacityVal">85%</span></label>
+      <label class="opacity-control"><span>Label</span><input type="range" id="labelOpacity" min="0" max="100" value="85"><span class="opacity-val" id="labelOpacityVal">85%</span></label>
+      <div class="toolbar-sep"></div>
+      <span id="toolbarInfo"></span>
+    </div>
+  </div>
+
+  <div id="mockupGrid" class="hidden">
+    <div class="mockup-toolbar">
+      <button class="btn btn-secondary" id="backBtn">&larr; Back</button>
+      <button class="btn btn-primary" id="downloadAllBtn">Download All</button>
+      <span id="genInfo"></span>
+    </div>
+    <div class="mockup-cards" id="mockupCards"></div>
+  </div>
+</div>
+
+</div><!-- /workspace -->
+
+<script>
+// ===================== STORAGE (IndexedDB) =====================
+const DB_NAME = 'MockupGenDB';
+const DB_VER = 3;
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const r = indexedDB.open(DB_NAME, DB_VER);
+    r.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('templates')) db.createObjectStore('templates', {keyPath:'id', autoIncrement:true});
+      if (!db.objectStoreNames.contains('labels')) db.createObjectStore('labels', {keyPath:'id', autoIncrement:true});
+      if (!db.objectStoreNames.contains('backgrounds')) db.createObjectStore('backgrounds', {keyPath:'id', autoIncrement:true});
+      if (!db.objectStoreNames.contains('backTemplates')) db.createObjectStore('backTemplates', {keyPath:'id', autoIncrement:true});
+    };
+    r.onsuccess = () => resolve(r.result);
+    r.onerror = () => reject(r.error);
+  });
+}
+
+async function dbAll(store) {
+  const db = await openDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction(store, 'readonly');
+    const req = tx.objectStore(store).getAll();
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+}
+
+async function dbAdd(store, item) {
+  const db = await openDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction(store, 'readwrite');
+    const req = tx.objectStore(store).add(item);
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+}
+
+async function dbPut(store, item) {
+  const db = await openDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction(store, 'readwrite');
+    const req = tx.objectStore(store).put(item);
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+}
+
+async function dbDel(store, id) {
+  const db = await openDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction(store, 'readwrite');
+    const req = tx.objectStore(store).delete(id);
+    req.onsuccess = () => res();
+    req.onerror = () => rej(req.error);
+  });
+}
+
+// ===================== HELPERS =====================
+function fileToDataUrl(file) {
+  return new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(file); });
+}
+
+function loadImg(src) {
+  return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+}
+
+function baseName(file) { return file.name.replace(/\.[^.]+$/, ''); }
+
+function mkBlobUrl(dataUrl) {
+  const [header, b64] = dataUrl.split(',');
+  const mime = header.match(/:(.*?);/)[1];
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return URL.createObjectURL(new Blob([bytes], {type: mime}));
+}
+
+// Extract dominant hue from image for color sorting.
+// Returns 0–360 for colorful shirts, 1000–1100 for achromatics (dark→light).
+async function computeSortHue(dataUrl) {
+  const size = 32;
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  const cx = c.getContext('2d');
+  try {
+    const resp = await fetch(dataUrl);
+    const blob = await resp.blob();
+    const bitmap = await createImageBitmap(blob, {resizeWidth: size, resizeHeight: size});
+    cx.drawImage(bitmap, 0, 0);
+    bitmap.close();
+  } catch {
+    const img = await loadImg(dataUrl);
+    cx.drawImage(img, 0, 0, size, size);
+  }
+  const data = cx.getImageData(0, 0, size, size).data;
+  let sinSum = 0, cosSum = 0, colorPx = 0, totalL = 0, opaquePx = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] < 30) continue; // skip transparent background
+    const r = data[i] / 255, g = data[i + 1] / 255, b = data[i + 2] / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), delta = max - min;
+    const l = (max + min) / 2;
+    totalL += l;
+    opaquePx++;
+    if (delta < 0.08) continue; // achromatic pixel — skip hue calculation
+    let h;
+    if (max === r) h = ((g - b) / delta + (g < b ? 6 : 0));
+    else if (max === g) h = (b - r) / delta + 2;
+    else h = (r - g) / delta + 4;
+    h = h * 60; // degrees
+    sinSum += Math.sin(h * Math.PI / 180);
+    cosSum += Math.cos(h * Math.PI / 180);
+    colorPx++;
+  }
+  if (opaquePx === 0) return 500;
+  if (colorPx < opaquePx * 0.08) {
+    // Mostly achromatic — sort after colors, dark first (black≈1000, white≈1100)
+    return 1000 + (totalL / opaquePx) * 100;
+  }
+  let avgH = Math.atan2(sinSum, cosSum) * 180 / Math.PI;
+  if (avgH < 0) avgH += 360;
+  return avgH;
+}
+
+// Render a 96×96 JPEG data URL — storable in IndexedDB so we never regenerate on reload
+// Uses createImageBitmap for off-main-thread decode+resize, falling back to loadImg
+async function makeThumbnailDataUrl(dataUrl) {
+  const size = 96;
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  const ctx = c.getContext('2d');
+  try {
+    const resp = await fetch(dataUrl);
+    const blob = await resp.blob();
+    const bitmap = await createImageBitmap(blob, {
+      resizeWidth: size, resizeHeight: size, resizeQuality: 'medium'
+    });
+    ctx.drawImage(bitmap, 0, 0);
+    bitmap.close();
+  } catch {
+    const img = await loadImg(dataUrl);
+    const scale = Math.min(size / img.width, size / img.height);
+    const w = img.width * scale, h = img.height * scale;
+    ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+  }
+  return c.toDataURL('image/jpeg', 0.85);
+}
+
+function imgIsDark(img) {
+  const size = 64;
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  const cx = c.getContext('2d');
+  cx.drawImage(img, 0, 0, size, size);
+  const data = cx.getImageData(0, 0, size, size).data;
+  let totalBrightness = 0, opaquePixels = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] < 30) continue; // skip transparent pixels
+    totalBrightness += (data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114);
+    opaquePixels++;
+  }
+  if (opaquePixels === 0) return false;
+  return (totalBrightness / opaquePixels) < 80;
+}
+
+// ===================== STATE =====================
+let templates = [];           // front shirt templates
+let backTemplates = [];       // back shirt templates (separate library)
+let neckLabels = [];
+let backgrounds = [];
+let selectedIds = new Set();      // front selections
+let backSelectedIds = new Set();  // back selections
+let activeLabelId = null;
+let activeBgId = null;
+let bgImg = null;
+let designDataUrl = null;
+let designImg = null;
+let templateImg = null;
+let labelImg = null;
+
+// Opacity (0-1)
+let designOpacityVal = 0.85;
+let labelOpacityVal = 0.85;
+
+// Positioning in template-pixel coordinates
+let designPos = {x:0, y:0};
+let designScale = 1;
+let labelPos = {x:0, y:0};
+let posInitialized = false;
+let labelPosInitialized = false;
+
+// Front/back side state — globals always represent the current side
+// sideState stores the OTHER side while you're not on it
+let currentSide = 'front';
+const sideState = {
+  front: { dataUrl: null, img: null, pos: {x:0,y:0}, scale: 1, posInitialized: false },
+  back:  { dataUrl: null, img: null, pos: {x:0,y:0}, scale: 1, posInitialized: false }
+};
+
+// Display
+let dScale = 1;
+
+// Label rendering scale
+function labelTemplateWidth() { return templateImg ? templateImg.width * 0.1 : 100; }
+function labelRenderScale() { return labelImg ? labelTemplateWidth() / labelImg.width : 1; }
+
+// Interaction
+let drag = null;
+let dragStart = {x:0,y:0};
+let dragOrigin = {x:0,y:0};
+let dragScaleOrigin = 1;
+
+let stage = 'positioning';
+
+// ===================== DOM =====================
+const $ = id => document.getElementById(id);
+const designDrop = $('designDrop'), designInput = $('designInput');
+const templateGrid = $('templateGrid'), selectionCount = $('selectionCount'), templateSearch = $('templateSearch');
+const templateDropLabel = $('templateDropLabel');
+const frontSideBtn = $('frontSideBtn'), backSideBtn = $('backSideBtn');
+const selectControls = $('selectControls'), selectAllBtn = $('selectAllBtn'), deselectAllBtn = $('deselectAllBtn');
+const templateDrop = $('templateDrop'), templateInput = $('templateInput');
+const labelList = $('labelList'), labelDrop = $('labelDrop'), labelInput = $('labelInput');
+const bgGrid = $('bgGrid'), bgInfo = $('bgInfo'), bgDrop = $('bgDrop'), bgInput = $('bgInput');
+const designOpacitySlider = $('designOpacity'), designOpacityDisplay = $('designOpacityVal');
+const labelOpacitySlider = $('labelOpacity'), labelOpacityDisplay = $('labelOpacityVal');
+const generateBtn = $('generateBtn');
+const canvas = $('previewCanvas'), ctx = canvas.getContext('2d');
+const canvasArea = $('canvasArea'), emptyState = $('emptyState');
+const toolbar = $('toolbar'), toolbarInfo = $('toolbarInfo');
+const resetPosBtn = $('resetPosBtn'), resetSizeBtn = $('resetSizeBtn');
+const mockupGrid = $('mockupGrid'), mockupCards = $('mockupCards');
+const backBtn = $('backBtn'), downloadAllBtn = $('downloadAllBtn'), genInfo = $('genInfo');
+
+// ===================== TABS =====================
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ===================== TEMPLATES =====================
+async function loadTemplates() {
+  const rows = await dbAll('templates');
+  templates = rows.map(t => ({
+    ...t,
+    blobUrl: mkBlobUrl(t.dataUrl),
+    thumbUrl: t.thumbDataUrl ? mkBlobUrl(t.thumbDataUrl) : null
+  }));
+  // Sort immediately using stored hues — templates with hue render in order right away
+  templates.sort((a, b) => (a.sortHue ?? 500) - (b.sortHue ?? 500));
+  renderSwatches();
+  // Migrate legacy records missing thumbnail or sort hue
+  const needsMigration = templates.filter(t => !t.thumbUrl || t.sortHue == null);
+  if (needsMigration.length) generateThumbnailsIdle(needsMigration);
+}
+
+function generateThumbnailsIdle(queue) {
+  if (!queue.length) {
+    // Migration complete — re-sort and re-render with all hues now known
+    templates.sort((a, b) => (a.sortHue ?? 500) - (b.sortHue ?? 500));
+    renderSwatches();
+    return;
+  }
+  const idle = window.requestIdleCallback || (cb => setTimeout(cb, 16));
+  idle(async deadline => {
+    while (queue.length) {
+      const t = queue.shift();
+      if (t) {
+        if (!t.thumbDataUrl) {
+          t.thumbDataUrl = await makeThumbnailDataUrl(t.dataUrl);
+          t.thumbUrl = mkBlobUrl(t.thumbDataUrl);
+          const imgEl = templateGrid.querySelector(`[data-id="${t.id}"] img`);
+          if (imgEl) { imgEl.src = t.thumbUrl; imgEl.decode().catch(() => {}); }
+        }
+        if (t.sortHue == null) {
+          t.sortHue = await computeSortHue(t.dataUrl);
+        }
+        // Persist both thumbnail and hue so future loads are instant and pre-sorted
+        dbPut('templates', {id: t.id, name: t.name, dataUrl: t.dataUrl, thumbDataUrl: t.thumbDataUrl, sortHue: t.sortHue});
+      }
+      if (deadline && deadline.timeRemaining && deadline.timeRemaining() < 5) break;
+    }
+    generateThumbnailsIdle(queue);
+  });
+}
+
+async function addTemplates(files) {
+  const progress = $('uploadProgress'), progressText = $('uploadProgressText');
+  const total = files.length;
+  progress.classList.add('visible');
+  for (let i = 0; i < files.length; i++) {
+    progressText.textContent = `Processing ${i + 1} of ${total}…`;
+    const f = files[i];
+    const dataUrl = await fileToDataUrl(f);
+    const name = baseName(f);
+    const thumbDataUrl = await makeThumbnailDataUrl(dataUrl);
+    const sortHue = await computeSortHue(dataUrl);
+    const id = await dbAdd('templates', {name, dataUrl, thumbDataUrl, sortHue});
+    const thumbUrl = mkBlobUrl(thumbDataUrl);
+    templates.push({id, name, dataUrl, thumbDataUrl, sortHue, blobUrl: mkBlobUrl(dataUrl), thumbUrl});
+  }
+  progress.classList.remove('visible');
+  templates.sort((a, b) => (a.sortHue ?? 500) - (b.sortHue ?? 500));
+  renderSwatches();
+  updateSelectionCount();
+  updatePreview();
+}
+
+async function removeTemplate(id) {
+  await dbDel('templates', id);
+  const t = templates.find(t => t.id === id);
+  if (t) {
+    if (t.blobUrl) URL.revokeObjectURL(t.blobUrl);
+    if (t.thumbUrl) URL.revokeObjectURL(t.thumbUrl);
+  }
+  templates = templates.filter(t => t.id !== id);
+  selectedIds.delete(id);
+  const el = templateGrid.querySelector(`[data-id="${id}"]`);
+  if (el) el.remove();
+  updateSelectionCount();
+  updateBtn();
+  updatePreview();
+}
+
+
+function buildSwatch(t) {
+  const side = currentSide; // capture at render time
+  const ids = getCurrentSelectedIds();
+  const d = document.createElement('div');
+  d.className = 'swatch' + (ids.has(t.id) ? ' selected' : '');
+  d.dataset.id = t.id;
+  d.title = t.name;
+  const img = document.createElement('img');
+  img.src = t.thumbUrl || t.blobUrl;
+  img.decode().catch(() => {});
+  d.appendChild(img);
+  const x = document.createElement('button');
+  x.className = 'x-btn';
+  x.textContent = '\u00d7';
+  x.title = 'Remove';
+  d.appendChild(x);
+  x.addEventListener('click', e => {
+    e.stopPropagation();
+    if (side === 'back') removeBackTemplate(t.id);
+    else removeTemplate(t.id);
+  });
+  d.addEventListener('click', () => {
+    if (ids.has(t.id)) { ids.delete(t.id); d.classList.remove('selected'); }
+    else { ids.add(t.id); d.classList.add('selected'); }
+    updateSelectionCount();
+    updateBtn();
+    updatePreview();
+  });
+  return d;
+}
+
+function getFilteredTemplates() {
+  const q = templateSearch.value.trim().toLowerCase();
+  const list = getCurrentTemplates();
+  return q ? list.filter(t => t.name.toLowerCase().includes(q)) : list;
+}
+
+function renderSwatches() {
+  templateGrid.innerHTML = '';
+  getFilteredTemplates().forEach(t => templateGrid.appendChild(buildSwatch(t)));
+  updateSelectionCount();
+}
+
+function updateSelectionCount() {
+  const ids = getCurrentSelectedIds();
+  const list = getCurrentTemplates();
+  selectionCount.textContent = list.length ? `${ids.size} of ${list.length} selected` : '';
+  selectControls.style.display = list.length ? 'flex' : 'none';
+}
+
+// ===================== BACK TEMPLATES =====================
+async function loadBackTemplates() {
+  const rows = await dbAll('backTemplates');
+  backTemplates = rows.map(t => ({
+    ...t,
+    blobUrl: mkBlobUrl(t.dataUrl),
+    thumbUrl: t.thumbDataUrl ? mkBlobUrl(t.thumbDataUrl) : null
+  }));
+  backTemplates.sort((a, b) => (a.sortHue ?? 500) - (b.sortHue ?? 500));
+  const needsMigration = backTemplates.filter(t => !t.thumbUrl || t.sortHue == null);
+  if (needsMigration.length) generateThumbnailsIdleBack(needsMigration);
+}
+
+function generateThumbnailsIdleBack(queue) {
+  if (!queue.length) {
+    backTemplates.sort((a, b) => (a.sortHue ?? 500) - (b.sortHue ?? 500));
+    if (currentSide === 'back') renderSwatches();
+    return;
+  }
+  const idle = window.requestIdleCallback || (cb => setTimeout(cb, 16));
+  idle(async deadline => {
+    while (queue.length) {
+      const t = queue.shift();
+      if (t) {
+        if (!t.thumbDataUrl) {
+          t.thumbDataUrl = await makeThumbnailDataUrl(t.dataUrl);
+          t.thumbUrl = mkBlobUrl(t.thumbDataUrl);
+          if (currentSide === 'back') {
+            const imgEl = templateGrid.querySelector(`[data-id="${t.id}"] img`);
+            if (imgEl) { imgEl.src = t.thumbUrl; imgEl.decode().catch(() => {}); }
+          }
+        }
+        if (t.sortHue == null) t.sortHue = await computeSortHue(t.dataUrl);
+        dbPut('backTemplates', {id: t.id, name: t.name, dataUrl: t.dataUrl, thumbDataUrl: t.thumbDataUrl, sortHue: t.sortHue});
+      }
+      if (deadline && deadline.timeRemaining && deadline.timeRemaining() < 5) break;
+    }
+    generateThumbnailsIdleBack(queue);
+  });
+}
+
+async function addBackTemplates(files) {
+  const progress = $('uploadProgress'), progressText = $('uploadProgressText');
+  const total = files.length;
+  progress.classList.add('visible');
+  for (let i = 0; i < files.length; i++) {
+    progressText.textContent = `Processing ${i + 1} of ${total}…`;
+    const f = files[i];
+    const dataUrl = await fileToDataUrl(f);
+    const name = baseName(f);
+    const thumbDataUrl = await makeThumbnailDataUrl(dataUrl);
+    const sortHue = await computeSortHue(dataUrl);
+    const id = await dbAdd('backTemplates', {name, dataUrl, thumbDataUrl, sortHue});
+    const thumbUrl = mkBlobUrl(thumbDataUrl);
+    backTemplates.push({id, name, dataUrl, thumbDataUrl, sortHue, blobUrl: mkBlobUrl(dataUrl), thumbUrl});
+  }
+  progress.classList.remove('visible');
+  backTemplates.sort((a, b) => (a.sortHue ?? 500) - (b.sortHue ?? 500));
+  if (currentSide === 'back') renderSwatches();
+  updateSelectionCount();
+  updatePreview();
+}
+
+async function removeBackTemplate(id) {
+  await dbDel('backTemplates', id);
+  const t = backTemplates.find(t => t.id === id);
+  if (t) {
+    if (t.blobUrl) URL.revokeObjectURL(t.blobUrl);
+    if (t.thumbUrl) URL.revokeObjectURL(t.thumbUrl);
+  }
+  backTemplates = backTemplates.filter(t => t.id !== id);
+  backSelectedIds.delete(id);
+  const el = templateGrid.querySelector(`[data-id="${id}"]`);
+  if (el) el.remove();
+  updateSelectionCount();
+  updateBtn();
+  updatePreview();
+}
+
+// ===================== NECK LABELS =====================
+async function loadLabels() {
+  neckLabels = await dbAll('labels');
+  if (neckLabels.length && activeLabelId === null) activeLabelId = neckLabels[0].id;
+  renderLabels();
+  await loadActiveLabelImg();
+}
+
+async function addLabel(file) {
+  const dataUrl = await fileToDataUrl(file);
+  const name = baseName(file);
+  const id = await dbAdd('labels', {name, dataUrl});
+  neckLabels.push({id, name, dataUrl});
+  if (neckLabels.length === 1) activeLabelId = id;
+  renderLabels();
+  await loadActiveLabelImg();
+  updatePreview();
+}
+
+async function removeLabel(id) {
+  await dbDel('labels', id);
+  neckLabels = neckLabels.filter(l => l.id !== id);
+  if (activeLabelId === id) activeLabelId = neckLabels.length ? neckLabels[0].id : null;
+  renderLabels();
+  await loadActiveLabelImg();
+  updatePreview();
+}
+
+function renderLabels() {
+  labelList.innerHTML = '';
+  neckLabels.forEach(l => {
+    const d = document.createElement('div');
+    d.className = 'label-item' + (activeLabelId === l.id ? ' active' : '');
+    const img = document.createElement('img');
+    img.src = l.dataUrl;
+    img.onload = () => {
+      if (imgIsDark(img)) img.style.background = '#e8e8ed';
+    };
+    d.appendChild(img);
+    const span = document.createElement('span');
+    span.textContent = l.name;
+    d.appendChild(span);
+    const x = document.createElement('button');
+    x.className = 'x-lbl';
+    x.textContent = '\u00d7';
+    d.appendChild(x);
+    x.addEventListener('click', e => { e.stopPropagation(); removeLabel(l.id); });
+    d.addEventListener('click', () => {
+      activeLabelId = l.id;
+      renderLabels();
+      loadActiveLabelImg().then(() => renderCanvas());
+    });
+    labelList.appendChild(d);
+  });
+}
+
+async function loadActiveLabelImg() {
+  if (activeLabelId !== null) {
+    const l = neckLabels.find(l => l.id === activeLabelId);
+    if (l) { labelImg = await loadImg(l.dataUrl); return; }
+  }
+  labelImg = null;
+}
+
+// ===================== BACKGROUNDS =====================
+async function loadBackgrounds() {
+  const rows = await dbAll('backgrounds');
+  backgrounds = rows.map(b => ({...b, blobUrl: mkBlobUrl(b.dataUrl)}));
+  if (backgrounds.length && activeBgId === null) activeBgId = backgrounds[0].id;
+  renderBgSwatches();
+  await loadActiveBgImg();
+}
+
+async function addBackgrounds(files) {
+  for (const f of files) {
+    const dataUrl = await fileToDataUrl(f);
+    const name = baseName(f);
+    const id = await dbAdd('backgrounds', {name, dataUrl});
+    backgrounds.push({id, name, dataUrl, blobUrl: mkBlobUrl(dataUrl)});
+  }
+  if (backgrounds.length && activeBgId === null) activeBgId = backgrounds[0].id;
+  renderBgSwatches();
+  await loadActiveBgImg();
+  updatePreview();
+}
+
+async function removeBackground(id) {
+  await dbDel('backgrounds', id);
+  const b = backgrounds.find(b => b.id === id);
+  if (b && b.blobUrl) URL.revokeObjectURL(b.blobUrl);
+  backgrounds = backgrounds.filter(b => b.id !== id);
+  if (activeBgId === id) activeBgId = backgrounds.length ? backgrounds[0].id : null;
+  renderBgSwatches();
+  await loadActiveBgImg();
+  updatePreview();
+}
+
+function renderBgSwatches() {
+  bgGrid.innerHTML = '';
+  backgrounds.forEach(b => {
+    const d = document.createElement('div');
+    d.className = 'swatch' + (activeBgId === b.id ? ' selected' : '');
+    d.title = b.name;
+    const img = document.createElement('img');
+    img.src = b.blobUrl;
+    d.appendChild(img);
+    const x = document.createElement('button');
+    x.className = 'x-btn';
+    x.textContent = '\u00d7';
+    x.title = 'Remove';
+    d.appendChild(x);
+    x.addEventListener('click', e => { e.stopPropagation(); removeBackground(b.id); });
+    d.addEventListener('click', () => {
+      activeBgId = activeBgId === b.id ? null : b.id;
+      renderBgSwatches();
+      loadActiveBgImg().then(() => renderCanvas());
+    });
+    bgGrid.appendChild(d);
+  });
+  bgInfo.textContent = backgrounds.length ? (activeBgId ? '1 selected' : 'None selected') : '';
+}
+
+async function loadActiveBgImg() {
+  if (activeBgId !== null) {
+    const b = backgrounds.find(b => b.id === activeBgId);
+    if (b) { bgImg = await loadImg(b.dataUrl); return; }
+  }
+  bgImg = null;
+}
+
+// ===================== DESIGN =====================
+// Save current globals into sideState[currentSide] (call before switching or generating)
+function syncSideState() {
+  sideState[currentSide].dataUrl = designDataUrl;
+  sideState[currentSide].img = designImg;
+  sideState[currentSide].pos = {x: designPos.x, y: designPos.y};
+  sideState[currentSide].scale = designScale;
+  sideState[currentSide].posInitialized = posInitialized;
+}
+
+function getCurrentTemplates() {
+  return currentSide === 'front' ? templates : backTemplates;
+}
+
+function getCurrentSelectedIds() {
+  return currentSide === 'front' ? selectedIds : backSelectedIds;
+}
+
+function switchSide(newSide) {
+  if (newSide === currentSide) return;
+  syncSideState();
+  currentSide = newSide;
+  // Restore the new side's state into globals
+  designDataUrl = sideState[newSide].dataUrl;
+  designImg = sideState[newSide].img;
+  designPos.x = sideState[newSide].pos.x;
+  designPos.y = sideState[newSide].pos.y;
+  designScale = sideState[newSide].scale;
+  posInitialized = sideState[newSide].posInitialized;
+  // Update toggle button states
+  frontSideBtn.classList.toggle('active', newSide === 'front');
+  backSideBtn.classList.toggle('active', newSide === 'back');
+  // Update shirt drop zone label
+  templateDropLabel.textContent = newSide === 'back'
+    ? 'Drop back shirt templates or click to upload'
+    : 'Drop shirt templates or click to upload';
+  // Hide neck label opacity control and Labels tab on back side
+  labelOpacitySlider.closest('.opacity-control').style.display = newSide === 'back' ? 'none' : '';
+  const labelsTabBtn = $('labelsTabBtn');
+  const labelsTabPane = $('tabLabels');
+  labelsTabBtn.style.display = newSide === 'back' ? 'none' : '';
+  if (newSide === 'back' && labelsTabBtn.classList.contains('active')) {
+    // Switch away from Labels tab to Shirts tab
+    labelsTabBtn.classList.remove('active');
+    labelsTabPane.classList.remove('active');
+    document.querySelector('.tab-btn[data-tab="tabTemplates"]').classList.add('active');
+    $('tabTemplates').classList.add('active');
+  }
+  // Re-render swatch grid with the correct library
+  templateSearch.value = '';
+  renderSwatches();
+  // Rebuild the design drop zone to show this side's design
+  refreshDesignDropZone();
+  updateBtn();
+  updatePreview();
+}
+
+function refreshDesignDropZone() {
+  if (designDataUrl && designImg) {
+    designDrop.classList.add('has-file');
+    designDrop.innerHTML = '';
+    const thumb = document.createElement('img');
+    thumb.src = designDataUrl;
+    thumb.className = 'design-thumb';
+    thumb.style.background = imgIsDark(designImg) ? '#e8e8ed' : '';
+    designDrop.appendChild(thumb);
+    const info = document.createElement('div');
+    info.className = 'design-file-info';
+    const hint = document.createElement('span');
+    hint.className = 'design-file-hint';
+    hint.textContent = 'Click to change';
+    info.appendChild(hint);
+    designDrop.appendChild(info);
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'design-remove';
+    removeBtn.textContent = '×';
+    removeBtn.title = 'Remove design';
+    removeBtn.addEventListener('click', e => { e.stopPropagation(); clearDesign(); });
+    designDrop.appendChild(removeBtn);
+  } else {
+    designDrop.classList.remove('has-file');
+    const label = currentSide === 'back' ? 'Drop back design here' : 'Drop your design here';
+    designDrop.innerHTML = `<svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>${label}<br><span style="opacity:0.6;font-size:11px">or click to browse</span>`;
+  }
+}
+
+async function setDesign(file) {
+  designDataUrl = await fileToDataUrl(file);
+  designImg = await loadImg(designDataUrl);
+  designDrop.classList.add('has-file');
+  designDrop.innerHTML = '';
+  const thumb = document.createElement('img');
+  thumb.src = designDataUrl;
+  thumb.className = 'design-thumb';
+  if (imgIsDark(designImg)) {
+    thumb.style.background = '#e8e8ed';
+  } else {
+    thumb.style.background = '';
+  }
+  designDrop.appendChild(thumb);
+  const info = document.createElement('div');
+  info.className = 'design-file-info';
+  const nameEl = document.createElement('span');
+  nameEl.className = 'design-file-name';
+  nameEl.textContent = file.name;
+  info.appendChild(nameEl);
+  const hint = document.createElement('span');
+  hint.className = 'design-file-hint';
+  hint.textContent = 'Click to change';
+  info.appendChild(hint);
+  designDrop.appendChild(info);
+  const removeBtn = document.createElement('button');
+  removeBtn.className = 'design-remove';
+  removeBtn.textContent = '×';
+  removeBtn.title = 'Remove design';
+  removeBtn.addEventListener('click', e => { e.stopPropagation(); clearDesign(); });
+  designDrop.appendChild(removeBtn);
+  posInitialized = false;
+  updateBtn();
+  updatePreview();
+}
+
+function clearDesign() {
+  designDataUrl = null;
+  designImg = null;
+  posInitialized = false;
+  refreshDesignDropZone();
+  updateBtn();
+  updatePreview();
+}
+
+function resetDesignPos() {
+  if (!designImg || !templateImg) return;
+  const w = templateImg.width * 0.35;
+  designScale = w / designImg.width;
+  const dw = designImg.width * designScale;
+  const dh = designImg.height * designScale;
+  designPos.x = (templateImg.width - dw) / 2;
+  designPos.y = templateImg.height * 0.28;
+  posInitialized = true;
+}
+
+function resetLabelPos() {
+  if (!templateImg) return;
+  labelPos.x = templateImg.width * 0.43;
+  labelPos.y = templateImg.height * 0.06;
+  labelPosInitialized = true;
+}
+
+// ===================== EXPORT / IMPORT =====================
+async function exportData() {
+  const [templateRows, labelRows, bgRows, backTemplateRows] = await Promise.all([
+    dbAll('templates'), dbAll('labels'), dbAll('backgrounds'), dbAll('backTemplates')
+  ]);
+  const payload = {
+    version: 2,
+    exported: new Date().toISOString(),
+    templates: templateRows.map(({name, dataUrl}) => ({name, dataUrl})),
+    backTemplates: backTemplateRows.map(({name, dataUrl}) => ({name, dataUrl})),
+    labels: labelRows.map(({name, dataUrl}) => ({name, dataUrl})),
+    backgrounds: bgRows.map(({name, dataUrl}) => ({name, dataUrl}))
+  };
+  const blob = new Blob([JSON.stringify(payload)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `mockbloom-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function importData(file) {
+  const syncStatus = $('syncStatus');
+  syncStatus.textContent = 'Importing…';
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if (!data.version || !Array.isArray(data.templates)) throw new Error('Invalid file');
+    const added = {templates: 0, labels: 0, backgrounds: 0};
+
+    // Templates
+    const existingTemplateNames = new Set(templates.map(t => t.name));
+    for (const item of data.templates) {
+      if (existingTemplateNames.has(item.name)) continue;
+      const thumbDataUrl = await makeThumbnailDataUrl(item.dataUrl);
+      const sortHue = await computeSortHue(item.dataUrl);
+      const id = await dbAdd('templates', {name: item.name, dataUrl: item.dataUrl, thumbDataUrl, sortHue});
+      templates.push({id, name: item.name, dataUrl: item.dataUrl, thumbDataUrl, sortHue,
+        blobUrl: mkBlobUrl(item.dataUrl), thumbUrl: mkBlobUrl(thumbDataUrl)});
+      added.templates++;
+    }
+    if (added.templates) {
+      templates.sort((a, b) => (a.sortHue ?? 500) - (b.sortHue ?? 500));
+      renderSwatches();
+    }
+
+    // Labels
+    const existingLabelNames = new Set(neckLabels.map(l => l.name));
+    for (const item of (data.labels || [])) {
+      if (existingLabelNames.has(item.name)) continue;
+      const id = await dbAdd('labels', {name: item.name, dataUrl: item.dataUrl});
+      neckLabels.push({id, name: item.name, dataUrl: item.dataUrl});
+      added.labels++;
+    }
+    if (added.labels) {
+      if (activeLabelId === null) activeLabelId = neckLabels[0].id;
+      renderLabels();
+      await loadActiveLabelImg();
+    }
+
+    // Back templates
+    added.backTemplates = 0;
+    const existingBackNames = new Set(backTemplates.map(t => t.name));
+    for (const item of (data.backTemplates || [])) {
+      if (existingBackNames.has(item.name)) continue;
+      const thumbDataUrl = await makeThumbnailDataUrl(item.dataUrl);
+      const sortHue = await computeSortHue(item.dataUrl);
+      const id = await dbAdd('backTemplates', {name: item.name, dataUrl: item.dataUrl, thumbDataUrl, sortHue});
+      backTemplates.push({id, name: item.name, dataUrl: item.dataUrl, thumbDataUrl, sortHue,
+        blobUrl: mkBlobUrl(item.dataUrl), thumbUrl: mkBlobUrl(thumbDataUrl)});
+      added.backTemplates++;
+    }
+    if (added.backTemplates) {
+      backTemplates.sort((a, b) => (a.sortHue ?? 500) - (b.sortHue ?? 500));
+      if (currentSide === 'back') renderSwatches();
+    }
+
+    // Backgrounds
+    const existingBgNames = new Set(backgrounds.map(b => b.name));
+    for (const item of (data.backgrounds || [])) {
+      if (existingBgNames.has(item.name)) continue;
+      const id = await dbAdd('backgrounds', {name: item.name, dataUrl: item.dataUrl});
+      backgrounds.push({id, name: item.name, dataUrl: item.dataUrl, blobUrl: mkBlobUrl(item.dataUrl)});
+      added.backgrounds++;
+    }
+    if (added.backgrounds) {
+      if (activeBgId === null) activeBgId = backgrounds[0].id;
+      renderBgSwatches();
+      await loadActiveBgImg();
+    }
+
+    const parts = [];
+    if (added.templates) parts.push(`${added.templates} front shirt${added.templates !== 1 ? 's' : ''}`);
+    if (added.backTemplates) parts.push(`${added.backTemplates} back shirt${added.backTemplates !== 1 ? 's' : ''}`);
+    if (added.labels) parts.push(`${added.labels} label${added.labels !== 1 ? 's' : ''}`);
+    if (added.backgrounds) parts.push(`${added.backgrounds} bg${added.backgrounds !== 1 ? 's' : ''}`);
+    syncStatus.textContent = parts.length ? `Imported: ${parts.join(', ')}` : 'Nothing new to import';
+  } catch {
+    syncStatus.textContent = 'Import failed — invalid file';
+  }
+  setTimeout(() => { syncStatus.textContent = ''; }, 4000);
+}
+
+// ===================== GENERATE BUTTON =====================
+function updateBtn() {
+  const frontDesign = currentSide === 'front' ? designDataUrl : sideState.front.dataUrl;
+  const canGenerate = (frontDesign && selectedIds.size > 0);
+  generateBtn.disabled = !canGenerate;
+}
+
+// ===================== PREVIEW =====================
+function previewTemplateId() {
+  const ids = getCurrentSelectedIds();
+  if (!ids.size) return null;
+  return [...ids][0];
+}
+
+async function updatePreview() {
+  const tid = previewTemplateId();
+  if (!tid || !designDataUrl) {
+    emptyState.classList.remove('hidden');
+    canvas.classList.add('hidden');
+    return;
+  }
+  emptyState.classList.add('hidden');
+  canvas.classList.remove('hidden');
+
+  const t = getCurrentTemplates().find(t => t.id === tid);
+  if (!t) return;
+  templateImg = await loadImg(t.dataUrl);
+
+  if (!posInitialized) resetDesignPos();
+  if (!labelPosInitialized) resetLabelPos();
+
+  fitCanvas();
+  renderCanvas();
+}
+
+function fitCanvas() {
+  if (!templateImg) return;
+  const r = canvasArea.getBoundingClientRect();
+  const maxW = r.width - 40;
+  const maxH = r.height - 80; // extra room for floating toolbar
+  dScale = Math.min(maxW / templateImg.width, maxH / templateImg.height, 1);
+  canvas.width = Math.round(templateImg.width * dScale);
+  canvas.height = Math.round(templateImg.height * dScale);
+}
+
+function renderCanvas() {
+  if (!templateImg) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Background
+  if (bgImg) {
+    ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
+  }
+
+  // Template
+  ctx.drawImage(templateImg, 0, 0, canvas.width, canvas.height);
+
+  // Design
+  if (designImg) {
+    const dw = designImg.width * designScale * dScale;
+    const dh = designImg.height * designScale * dScale;
+    const dx = designPos.x * dScale;
+    const dy = designPos.y * dScale;
+    ctx.save();
+    ctx.globalAlpha = designOpacityVal;
+    ctx.drawImage(designImg, dx, dy, dw, dh);
+    ctx.restore();
+
+    // Dashed border
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,107,107,0.5)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5,4]);
+    ctx.strokeRect(dx, dy, dw, dh);
+    ctx.restore();
+
+    // Resize handle
+    const hs = 10;
+    ctx.fillStyle = '#ff6b6b';
+    ctx.fillRect(dx+dw-hs, dy+dh-hs, hs, hs);
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(dx+dw-hs, dy+dh-hs, hs, hs);
+
+    // Center guides while dragging design
+    if (drag === 'design' || drag === 'resize') {
+      drawCenterGuides(designPos, designImg.width * designScale, designImg.height * designScale);
+    }
+  }
+
+  // Neck label (front side only)
+  if (labelImg && templateImg && currentSide === 'front') {
+    const ls = labelRenderScale();
+    const lw = labelImg.width * ls * dScale;
+    const lh = labelImg.height * ls * dScale;
+    const lx = labelPos.x * dScale;
+    const ly = labelPos.y * dScale;
+    ctx.save();
+    ctx.globalAlpha = labelOpacityVal;
+    ctx.drawImage(labelImg, lx, ly, lw, lh);
+    ctx.restore();
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,138,92,0.5)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([5,4]);
+    ctx.strokeRect(lx, ly, lw, lh);
+    ctx.restore();
+
+    // Center guides while dragging label
+    if (drag === 'label') {
+      const lsG = labelRenderScale();
+      drawCenterGuides(labelPos, labelImg.width * lsG, labelImg.height * lsG);
+    }
+  }
+
+  // Toolbar info
+  if (designImg) {
+    const w = Math.round(designImg.width * designScale);
+    const h = Math.round(designImg.height * designScale);
+    toolbarInfo.textContent = `${w}\u00d7${h}px \u2022 (${Math.round(designPos.x)}, ${Math.round(designPos.y)})`;
+  }
+}
+
+// ===================== CENTER GUIDES =====================
+const SNAP_THRESH = 5;
+
+function drawCenterGuides(pos, elemW, elemH) {
+  if (!templateImg) return;
+  const tCx = templateImg.width / 2;
+  const tCy = templateImg.height / 2;
+  const eCx = pos.x + elemW / 2;
+  const eCy = pos.y + elemH / 2;
+
+  ctx.save();
+  ctx.strokeStyle = '#ff6b6b';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([]);
+
+  if (Math.abs(eCx - tCx) < SNAP_THRESH) {
+    const sx = tCx * dScale;
+    ctx.beginPath();
+    ctx.moveTo(sx, 0);
+    ctx.lineTo(sx, canvas.height);
+    ctx.stroke();
+  }
+
+  if (Math.abs(eCy - tCy) < SNAP_THRESH) {
+    const sy = tCy * dScale;
+    ctx.beginPath();
+    ctx.moveTo(0, sy);
+    ctx.lineTo(canvas.width, sy);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+// ===================== CANVAS INTERACTION =====================
+function designRect() {
+  if (!designImg) return null;
+  return {
+    x: designPos.x * dScale,
+    y: designPos.y * dScale,
+    w: designImg.width * designScale * dScale,
+    h: designImg.height * designScale * dScale
+  };
+}
+
+function labelRect() {
+  if (!labelImg || !templateImg) return null;
+  const ls = labelRenderScale();
+  return {
+    x: labelPos.x * dScale,
+    y: labelPos.y * dScale,
+    w: labelImg.width * ls * dScale,
+    h: labelImg.height * ls * dScale
+  };
+}
+
+function inRect(mx, my, r) { return mx >= r.x && mx <= r.x+r.w && my >= r.y && my <= r.y+r.h; }
+
+function onHandle(mx, my) {
+  const r = designRect();
+  if (!r) return false;
+  const margin = 14;
+  return mx >= r.x+r.w-margin && mx <= r.x+r.w+margin && my >= r.y+r.h-margin && my <= r.y+r.h+margin;
+}
+
+canvas.addEventListener('mousedown', e => {
+  const cr = canvas.getBoundingClientRect();
+  const mx = e.clientX - cr.left;
+  const my = e.clientY - cr.top;
+
+  if (onHandle(mx, my)) {
+    drag = 'resize';
+    dragStart = {x:mx, y:my};
+    dragScaleOrigin = designScale;
+    canvas.style.cursor = 'nwse-resize';
+    return;
+  }
+
+  const dr = designRect();
+  if (dr && inRect(mx, my, dr)) {
+    drag = 'design';
+    dragStart = {x:mx, y:my};
+    dragOrigin = {...designPos};
+    canvas.style.cursor = 'grabbing';
+    return;
+  }
+
+  const lr = labelRect();
+  if (lr && inRect(mx, my, lr)) {
+    drag = 'label';
+    dragStart = {x:mx, y:my};
+    dragOrigin = {...labelPos};
+    canvas.style.cursor = 'grabbing';
+    return;
+  }
+});
+
+canvas.addEventListener('mousemove', e => {
+  const cr = canvas.getBoundingClientRect();
+  const mx = e.clientX - cr.left;
+  const my = e.clientY - cr.top;
+
+  if (!drag) {
+    if (onHandle(mx, my)) canvas.style.cursor = 'nwse-resize';
+    else if (designRect() && inRect(mx, my, designRect())) canvas.style.cursor = 'grab';
+    else if (labelRect() && inRect(mx, my, labelRect())) canvas.style.cursor = 'grab';
+    else canvas.style.cursor = 'default';
+    return;
+  }
+
+  const dx = mx - dragStart.x;
+  const dy = my - dragStart.y;
+
+  if (drag === 'design') {
+    designPos.x = dragOrigin.x + dx / dScale;
+    designPos.y = dragOrigin.y + dy / dScale;
+    if (templateImg && designImg) {
+      const ew = designImg.width * designScale;
+      const eh = designImg.height * designScale;
+      const tCx = templateImg.width / 2;
+      const tCy = templateImg.height / 2;
+      if (Math.abs((designPos.x + ew / 2) - tCx) < SNAP_THRESH) designPos.x = tCx - ew / 2;
+      if (Math.abs((designPos.y + eh / 2) - tCy) < SNAP_THRESH) designPos.y = tCy - eh / 2;
+    }
+  } else if (drag === 'label') {
+    labelPos.x = dragOrigin.x + dx / dScale;
+    labelPos.y = dragOrigin.y + dy / dScale;
+    if (templateImg && labelImg) {
+      const ls = labelRenderScale();
+      const ew = labelImg.width * ls;
+      const eh = labelImg.height * ls;
+      const tCx = templateImg.width / 2;
+      const tCy = templateImg.height / 2;
+      if (Math.abs((labelPos.x + ew / 2) - tCx) < SNAP_THRESH) labelPos.x = tCx - ew / 2;
+      if (Math.abs((labelPos.y + eh / 2) - tCy) < SNAP_THRESH) labelPos.y = tCy - eh / 2;
+    }
+  } else if (drag === 'resize') {
+    const tmX = mx / dScale;
+    const newW = tmX - designPos.x;
+    if (newW > 10) {
+      designScale = newW / designImg.width;
+    }
+  }
+
+  renderCanvas();
+});
+
+canvas.addEventListener('mouseup', () => { drag = null; canvas.style.cursor = 'default'; });
+canvas.addEventListener('mouseleave', () => { drag = null; });
+
+// ===================== GENERATION =====================
+
+// Render a single mockup side to a JPEG data URL.
+// includeLabel controls whether the neck label is composited (front only).
+async function renderMockupSide(tDataUrl, sideS, includeLabel) {
+  if (!sideS.img) return null;
+  const tImg = await loadImg(tDataUrl);
+  const outW = 2600, outH = 2000;
+  const c = document.createElement('canvas');
+  c.width = outW; c.height = outH;
+  const cx = c.getContext('2d');
+  const s = Math.min(outW / tImg.width, outH / tImg.height);
+  const tw = tImg.width * s, th = tImg.height * s;
+  const ox = (outW - tw) / 2, oy = (outH - th) / 2;
+  cx.fillStyle = '#000';
+  cx.fillRect(0, 0, outW, outH);
+  if (bgImg) cx.drawImage(bgImg, 0, 0, outW, outH);
+  cx.drawImage(tImg, ox, oy, tw, th);
+  const dw = sideS.img.width * sideS.scale * s;
+  const dh = sideS.img.height * sideS.scale * s;
+  cx.save();
+  cx.globalAlpha = designOpacityVal;
+  cx.drawImage(sideS.img, sideS.pos.x * s + ox, sideS.pos.y * s + oy, dw, dh);
+  cx.restore();
+  if (includeLabel && labelImg) {
+    const ls = labelTemplateWidth() / labelImg.width;
+    const lw = labelImg.width * ls * s, lh = labelImg.height * ls * s;
+    cx.save();
+    cx.globalAlpha = labelOpacityVal;
+    cx.drawImage(labelImg, labelPos.x * s + ox, labelPos.y * s + oy, lw, lh);
+    cx.restore();
+  }
+  return c.toDataURL('image/jpeg', 0.92);
+}
+
+function addMockupCard(label, dataUrl, downloadName) {
+  const card = document.createElement('div');
+  card.className = 'mockup-card';
+  const img = document.createElement('img');
+  img.src = dataUrl;
+  card.appendChild(img);
+  const footer = document.createElement('div');
+  footer.className = 'mockup-card-footer';
+  const span = document.createElement('span');
+  span.textContent = label;
+  footer.appendChild(span);
+  const btn = document.createElement('button');
+  btn.textContent = 'Download';
+  btn.addEventListener('click', () => downloadJpeg(dataUrl, downloadName));
+  footer.appendChild(btn);
+  card.appendChild(footer);
+  mockupCards.appendChild(card);
+}
+
+async function generateMockups() {
+  // Sync current side globals into sideState so both sides are accessible
+  syncSideState();
+
+  stage = 'generated';
+  canvasArea.classList.add('hidden');
+  mockupGrid.classList.remove('hidden');
+  mockupCards.innerHTML = '';
+
+  const generated = [];
+  const hasBackDesign = !!sideState.back.img;
+
+  // Front mockups
+  for (const id of [...selectedIds]) {
+    const t = templates.find(t => t.id === id);
+    if (!t) continue;
+    const dataUrl = await renderMockupSide(t.dataUrl, sideState.front, true);
+    if (dataUrl) {
+      generated.push({name: t.name, dataUrl});
+      addMockupCard(t.name, dataUrl, t.name);
+    }
+  }
+
+  // Back mockups (only when a back design is uploaded)
+  if (hasBackDesign) {
+    for (const id of [...backSelectedIds]) {
+      const t = backTemplates.find(t => t.id === id);
+      if (!t) continue;
+      const dataUrl = await renderMockupSide(t.dataUrl, sideState.back, false);
+      if (dataUrl) {
+        const label = `${t.name} (Back)`;
+        generated.push({name: label, dataUrl});
+        addMockupCard(label, dataUrl, label);
+      }
+    }
+  }
+
+  const total = generated.length;
+  genInfo.textContent = `${total} mockup${total !== 1 ? 's' : ''}`;
+  window._generatedMockups = generated;
+}
+
+function downloadJpeg(dataUrl, name) {
+  const a = document.createElement('a');
+  a.href = dataUrl;
+  a.download = name + '_mockup.jpg';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function downloadAll() {
+  const mockups = window._generatedMockups || [];
+  mockups.forEach((m, i) => {
+    setTimeout(() => downloadJpeg(m.dataUrl, m.name), i * 300);
+  });
+}
+
+function goBack() {
+  stage = 'positioning';
+  mockupGrid.classList.add('hidden');
+  canvasArea.classList.remove('hidden');
+  updatePreview();
+}
+
+// ===================== EVENT WIRING =====================
+
+function wireDropZone(zone, input, onFiles, acceptTypes) {
+  const types = acceptTypes || ['image/png'];
+  zone.addEventListener('click', () => input.click());
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('dragover');
+    const valid = [...e.dataTransfer.files].filter(f => types.includes(f.type));
+    if (valid.length) onFiles(valid);
+  });
+  input.addEventListener('change', () => { if (input.files.length) onFiles([...input.files]); input.value = ''; });
+}
+
+wireDropZone(designDrop, designInput, files => setDesign(files[0]));
+wireDropZone(templateDrop, templateInput, files => currentSide === 'back' ? addBackTemplates(files) : addTemplates(files));
+wireDropZone(labelDrop, labelInput, files => addLabel(files[0]));
+wireDropZone(bgDrop, bgInput, files => addBackgrounds(files), ['image/png', 'image/jpeg']);
+
+$('exportBtn').addEventListener('click', exportData);
+$('importBtn').addEventListener('click', () => $('importInput').click());
+$('importInput').addEventListener('change', e => {
+  if (e.target.files[0]) importData(e.target.files[0]);
+  e.target.value = '';
+});
+
+frontSideBtn.addEventListener('click', () => switchSide('front'));
+backSideBtn.addEventListener('click', () => switchSide('back'));
+selectAllBtn.addEventListener('click', () => {
+  getFilteredTemplates().forEach(t => getCurrentSelectedIds().add(t.id));
+  templateGrid.querySelectorAll('.swatch').forEach(el => el.classList.add('selected'));
+  updateSelectionCount(); updateBtn(); updatePreview();
+});
+deselectAllBtn.addEventListener('click', () => {
+  getCurrentSelectedIds().clear();
+  templateGrid.querySelectorAll('.swatch').forEach(el => el.classList.remove('selected'));
+  updateSelectionCount(); updateBtn(); updatePreview();
+});
+
+templateSearch.addEventListener('input', () => renderSwatches());
+
+generateBtn.addEventListener('click', generateMockups);
+backBtn.addEventListener('click', goBack);
+downloadAllBtn.addEventListener('click', downloadAll);
+
+designOpacitySlider.addEventListener('input', () => {
+  designOpacityVal = designOpacitySlider.value / 100;
+  designOpacityDisplay.textContent = designOpacitySlider.value + '%';
+  renderCanvas();
+});
+labelOpacitySlider.addEventListener('input', () => {
+  labelOpacityVal = labelOpacitySlider.value / 100;
+  labelOpacityDisplay.textContent = labelOpacitySlider.value + '%';
+  renderCanvas();
+});
+
+resetPosBtn.addEventListener('click', () => { resetDesignPos(); resetLabelPos(); renderCanvas(); });
+resetSizeBtn.addEventListener('click', () => {
+  if (!designImg || !templateImg) return;
+  const w = templateImg.width * 0.35;
+  designScale = w / designImg.width;
+  renderCanvas();
+});
+
+window.addEventListener('resize', () => {
+  if (stage === 'positioning' && !canvas.classList.contains('hidden')) {
+    fitCanvas();
+    renderCanvas();
+  }
+});
+
+// ===================== INIT =====================
+async function init() {
+  await loadTemplates();
+  await loadBackTemplates();
+  await loadLabels();
+  await loadBackgrounds();
+  updateBtn();
+}
+init();
+</script>
+</body>
+</html>
