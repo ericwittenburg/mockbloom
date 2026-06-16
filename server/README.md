@@ -12,11 +12,13 @@ Express + Supabase backend for MockBloom. Handles auth, per-user image storage, 
 ## 1. Supabase Project Setup
 
 ### 1.1 Create the project
+
 1. Go to <https://supabase.com> and sign in.
 2. Click **New project**. Pick any name (e.g. `mockbloom`), region (closest to you), and set a strong DB password.
 3. Wait ~2 minutes for the project to provision.
 
 ### 1.2 Grab the API keys
+
 1. Open **Project Settings → API**.
 2. Copy the following — you'll paste them into `.env` shortly:
    - **Project URL** → `SUPABASE_URL`
@@ -25,6 +27,7 @@ Express + Supabase backend for MockBloom. Handles auth, per-user image storage, 
 3. ⚠️ The service role key bypasses all RLS. Never put it in the frontend, never commit it to git.
 
 ### 1.3 Create the Storage buckets
+
 1. Open **Storage** (left sidebar) → **New bucket**.
 2. Create `templates` → toggle **Public** OFF → **Create**.
 3. Create `mockups` → toggle **Public** OFF → **Create**.
@@ -32,6 +35,7 @@ Express + Supabase backend for MockBloom. Handles auth, per-user image storage, 
 Both buckets are private. The backend hands out short-lived signed URLs at read time.
 
 ### 1.4 Run the SQL (tables + RLS policies)
+
 1. Open **SQL Editor** → **New query**.
 2. Paste the entire block below and click **Run**.
 
@@ -195,7 +199,9 @@ create policy "mockups_bucket_delete_own"
 If everything ran without errors, you should see three tables under **Database → Tables** and policies under **Authentication → Policies**.
 
 ### 1.5 (Optional) Disable email confirmation for fast local testing
+
 By default Supabase requires email verification before a user can log in.
+
 - For local development: **Authentication → Providers → Email** → toggle **Confirm email** OFF → Save.
 - For production: leave it ON.
 
@@ -226,12 +232,14 @@ npm run dev
 ```
 
 You should see:
+
 ```
 MockBloom API listening on port 3001
 Allowed origins: http://localhost:3000
 ```
 
 Test the health check:
+
 ```bash
 curl http://localhost:3001/
 # → {"service":"mockbloom-api","status":"ok"}
@@ -242,7 +250,9 @@ curl http://localhost:3001/
 ## 4. Deploy to Render (free tier)
 
 ### 4.1 Push the project to GitHub
+
 If you haven't yet:
+
 ```bash
 cd /Users/ericwittenburg/coding/mockup-generator
 git init
@@ -254,6 +264,7 @@ git push -u origin main
 ```
 
 ### 4.2 Create the Render service
+
 1. Go to <https://render.com> and sign in with GitHub.
 2. Click **New → Web Service**.
 3. Connect the GitHub repo you just pushed.
@@ -271,6 +282,7 @@ git push -u origin main
 6. Click **Create Web Service**. First deploy takes ~3–5 minutes.
 
 ### 4.3 Verify
+
 ```bash
 curl https://mockbloom-api.onrender.com/
 # → {"service":"mockbloom-api","status":"ok"}
@@ -294,15 +306,15 @@ Below is the minimum drop-in needed for each of those — paste each block into 
 
 ```javascript
 // ===== API CONFIG =====
-const API_BASE = 'http://localhost:3001/api/v1';
+const API_BASE = "http://localhost:3001/api/v1";
 // In production, swap to: 'https://mockbloom-api.onrender.com/api/v1'
 
 function authToken() {
-  return localStorage.getItem('mb_token') || '';
+  return localStorage.getItem("mb_token") || "";
 }
 function setAuthToken(token) {
-  if (token) localStorage.setItem('mb_token', token);
-  else localStorage.removeItem('mb_token');
+  if (token) localStorage.setItem("mb_token", token);
+  else localStorage.removeItem("mb_token");
 }
 function authHeaders() {
   const t = authToken();
@@ -311,8 +323,12 @@ function authHeaders() {
 async function apiFetch(path, opts = {}) {
   const headers = { ...(opts.headers || {}), ...authHeaders() };
   // Don't override Content-Type for FormData (multer needs the boundary header)
-  if (opts.body && !(opts.body instanceof FormData) && !headers['Content-Type']) {
-    headers['Content-Type'] = 'application/json';
+  if (
+    opts.body &&
+    !(opts.body instanceof FormData) &&
+    !headers["Content-Type"]
+  ) {
+    headers["Content-Type"] = "application/json";
   }
   const res = await fetch(`${API_BASE}${path}`, { ...opts, headers });
   const data = await res.json().catch(() => ({}));
@@ -326,9 +342,9 @@ async function apiFetch(path, opts = {}) {
 ```javascript
 // POST /api/v1/auth/signup
 async function signup(email, password) {
-  const { session } = await apiFetch('/auth/signup', {
-    method: 'POST',
-    body: JSON.stringify({ email, password })
+  const { session } = await apiFetch("/auth/signup", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
   });
   if (session?.access_token) setAuthToken(session.access_token);
   return session;
@@ -336,9 +352,9 @@ async function signup(email, password) {
 
 // POST /api/v1/auth/login
 async function login(email, password) {
-  const { session } = await apiFetch('/auth/login', {
-    method: 'POST',
-    body: JSON.stringify({ email, password })
+  const { session } = await apiFetch("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
   });
   setAuthToken(session.access_token);
   return session;
@@ -346,7 +362,9 @@ async function login(email, password) {
 
 // POST /api/v1/auth/logout
 async function logout() {
-  try { await apiFetch('/auth/logout', { method: 'POST' }); } catch {}
+  try {
+    await apiFetch("/auth/logout", { method: "POST" });
+  } catch {}
   setAuthToken(null);
 }
 ```
@@ -358,24 +376,27 @@ async function logout() {
 // kind = 'front' | 'back' | 'label'
 async function apiUploadTemplate(file, name, kind, sortHue) {
   const fd = new FormData();
-  fd.append('file', file);
-  fd.append('name', name);
-  fd.append('kind', kind);
-  if (sortHue != null) fd.append('sortHue', String(sortHue));
-  const { template } = await apiFetch('/templates', { method: 'POST', body: fd });
+  fd.append("file", file);
+  fd.append("name", name);
+  fd.append("kind", kind);
+  if (sortHue != null) fd.append("sortHue", String(sortHue));
+  const { template } = await apiFetch("/templates", {
+    method: "POST",
+    body: fd,
+  });
   return template;
 }
 
 // GET /api/v1/templates?kind=front
 async function apiListTemplates(kind) {
-  const q = kind ? `?kind=${encodeURIComponent(kind)}` : '';
+  const q = kind ? `?kind=${encodeURIComponent(kind)}` : "";
   const { templates } = await apiFetch(`/templates${q}`);
   return templates; // each row has a `signedUrl` you can drop into <img src>
 }
 
 // DELETE /api/v1/templates/:id
 async function apiDeleteTemplate(id) {
-  await apiFetch(`/templates/${id}`, { method: 'DELETE' });
+  await apiFetch(`/templates/${id}`, { method: "DELETE" });
 }
 ```
 
@@ -387,21 +408,21 @@ async function apiDeleteTemplate(id) {
 async function apiSaveMockup(name, dataUrl) {
   const blob = await (await fetch(dataUrl)).blob();
   const fd = new FormData();
-  fd.append('name', name);
-  fd.append('file', blob, `${name}.jpg`);
-  const { mockup } = await apiFetch('/mockups', { method: 'POST', body: fd });
+  fd.append("name", name);
+  fd.append("file", blob, `${name}.jpg`);
+  const { mockup } = await apiFetch("/mockups", { method: "POST", body: fd });
   return mockup;
 }
 
 // GET /api/v1/mockups
 async function apiListMockups() {
-  const { mockups } = await apiFetch('/mockups');
+  const { mockups } = await apiFetch("/mockups");
   return mockups;
 }
 
 // DELETE /api/v1/mockups/:id
 async function apiDeleteMockup(id) {
-  await apiFetch(`/mockups/${id}`, { method: 'DELETE' });
+  await apiFetch(`/mockups/${id}`, { method: "DELETE" });
 }
 ```
 
@@ -411,21 +432,24 @@ async function apiDeleteMockup(id) {
 // POST /api/v1/backgrounds
 async function apiUploadBackground(file, name) {
   const fd = new FormData();
-  fd.append('file', file);
-  fd.append('name', name);
-  const { background } = await apiFetch('/backgrounds', { method: 'POST', body: fd });
+  fd.append("file", file);
+  fd.append("name", name);
+  const { background } = await apiFetch("/backgrounds", {
+    method: "POST",
+    body: fd,
+  });
   return background;
 }
 
 // GET /api/v1/backgrounds
 async function apiListBackgrounds() {
-  const { backgrounds } = await apiFetch('/backgrounds');
+  const { backgrounds } = await apiFetch("/backgrounds");
   return backgrounds;
 }
 
 // DELETE /api/v1/backgrounds/:id
 async function apiDeleteBackground(id) {
-  await apiFetch(`/backgrounds/${id}`, { method: 'DELETE' });
+  await apiFetch(`/backgrounds/${id}`, { method: "DELETE" });
 }
 ```
 
@@ -434,32 +458,36 @@ async function apiDeleteBackground(id) {
 The cleanest cut-over is to keep the in-memory `templates` array but populate it from the API. The rest of the frontend keeps working because it already operates on the array, not directly on IndexedDB.
 
 **Before** (uses IndexedDB):
+
 ```javascript
 async function loadTemplates() {
-  const rows = await dbAll('templates');
-  templates = rows.map(t => ({
+  const rows = await dbAll("templates");
+  templates = rows.map((t) => ({
     ...t,
     blobUrl: mkBlobUrl(t.dataUrl),
-    thumbUrl: t.thumbDataUrl ? mkBlobUrl(t.thumbDataUrl) : null
+    thumbUrl: t.thumbDataUrl ? mkBlobUrl(t.thumbDataUrl) : null,
   }));
   templates.sort((a, b) => (a.sortHue ?? 500) - (b.sortHue ?? 500));
   renderSwatches();
-  const needsMigration = templates.filter(t => !t.thumbUrl || t.sortHue == null);
+  const needsMigration = templates.filter(
+    (t) => !t.thumbUrl || t.sortHue == null,
+  );
   if (needsMigration.length) generateThumbnailsIdle(needsMigration);
 }
 ```
 
 **After** (uses the API):
+
 ```javascript
 async function loadTemplates() {
-  const rows = await apiListTemplates('front');
-  templates = rows.map(t => ({
+  const rows = await apiListTemplates("front");
+  templates = rows.map((t) => ({
     id: t.id,
     name: t.name,
     sortHue: t.sort_hue,
-    dataUrl: t.signedUrl,    // signed URL works anywhere a data URL does for <img src>
+    dataUrl: t.signedUrl, // signed URL works anywhere a data URL does for <img src>
     blobUrl: t.signedUrl,
-    thumbUrl: t.signedUrl    // server doesn't store thumbnails in v1 — see plan note
+    thumbUrl: t.signedUrl, // server doesn't store thumbnails in v1 — see plan note
   }));
   templates.sort((a, b) => (a.sortHue ?? 500) - (b.sortHue ?? 500));
   renderSwatches();
@@ -467,6 +495,7 @@ async function loadTemplates() {
 ```
 
 **Before** (uploads to IndexedDB):
+
 ```javascript
 async function addTemplates(files) {
   // ... thumbnail + sortHue + dbAdd ...
@@ -474,27 +503,29 @@ async function addTemplates(files) {
 ```
 
 **After** (uploads via API):
+
 ```javascript
 async function addTemplates(files) {
-  const progress = $('uploadProgress'), progressText = $('uploadProgressText');
-  progress.classList.add('visible');
+  const progress = $("uploadProgress"),
+    progressText = $("uploadProgressText");
+  progress.classList.add("visible");
   for (let i = 0; i < files.length; i++) {
     progressText.textContent = `Processing ${i + 1} of ${files.length}…`;
     const f = files[i];
     // Compute sortHue client-side from the file before upload
     const dataUrl = await fileToDataUrl(f);
     const sortHue = await computeSortHue(dataUrl);
-    const row = await apiUploadTemplate(f, baseName(f), 'front', sortHue);
+    const row = await apiUploadTemplate(f, baseName(f), "front", sortHue);
     templates.push({
       id: row.id,
       name: row.name,
       sortHue: row.sort_hue,
       dataUrl: row.signedUrl,
       blobUrl: row.signedUrl,
-      thumbUrl: row.signedUrl
+      thumbUrl: row.signedUrl,
     });
   }
-  progress.classList.remove('visible');
+  progress.classList.remove("visible");
   templates.sort((a, b) => (a.sortHue ?? 500) - (b.sortHue ?? 500));
   renderSwatches();
   updateSelectionCount();
@@ -503,18 +534,20 @@ async function addTemplates(files) {
 ```
 
 **Before** (deletes from IndexedDB):
+
 ```javascript
 async function removeTemplate(id) {
-  await dbDel('templates', id);
+  await dbDel("templates", id);
   // ...
 }
 ```
 
 **After** (deletes via API):
+
 ```javascript
 async function removeTemplate(id) {
   await apiDeleteTemplate(id);
-  templates = templates.filter(t => t.id !== id);
+  templates = templates.filter((t) => t.id !== id);
   selectedIds.delete(id);
   const el = templateGrid.querySelector(`[data-id="${id}"]`);
   if (el) el.remove();
@@ -530,10 +563,22 @@ Apply the same pattern to `loadBackTemplates` / `addBackTemplates` / `removeBack
 
 ```html
 <!-- somewhere before <div id="workspace"> -->
-<div id="authOverlay" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#0a0a0b;z-index:9999">
-  <form id="authForm" style="display:flex;flex-direction:column;gap:12px;width:280px">
-    <input id="authEmail" type="email" placeholder="email" required>
-    <input id="authPassword" type="password" placeholder="password" required minlength="6">
+<div
+  id="authOverlay"
+  style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#0a0a0b;z-index:9999"
+>
+  <form
+    id="authForm"
+    style="display:flex;flex-direction:column;gap:12px;width:280px"
+  >
+    <input id="authEmail" type="email" placeholder="email" required />
+    <input
+      id="authPassword"
+      type="password"
+      placeholder="password"
+      required
+      minlength="6"
+    />
     <div style="display:flex;gap:8px">
       <button type="submit" data-mode="login">Log in</button>
       <button type="submit" data-mode="signup">Sign up</button>
@@ -544,21 +589,25 @@ Apply the same pattern to `loadBackTemplates` / `addBackTemplates` / `removeBack
 ```
 
 ```javascript
-const authOverlay = document.getElementById('authOverlay');
-const authForm = document.getElementById('authForm');
-const authError = document.getElementById('authError');
+const authOverlay = document.getElementById("authOverlay");
+const authForm = document.getElementById("authForm");
+const authError = document.getElementById("authError");
 
-function hideAuthOverlay() { authOverlay.style.display = 'none'; }
-function showAuthOverlay() { authOverlay.style.display = 'flex'; }
+function hideAuthOverlay() {
+  authOverlay.style.display = "none";
+}
+function showAuthOverlay() {
+  authOverlay.style.display = "flex";
+}
 
-authForm.addEventListener('submit', async e => {
+authForm.addEventListener("submit", async (e) => {
   e.preventDefault();
-  authError.textContent = '';
-  const mode = e.submitter?.dataset.mode || 'login';
-  const email = document.getElementById('authEmail').value;
-  const password = document.getElementById('authPassword').value;
+  authError.textContent = "";
+  const mode = e.submitter?.dataset.mode || "login";
+  const email = document.getElementById("authEmail").value;
+  const password = document.getElementById("authPassword").value;
   try {
-    if (mode === 'signup') await signup(email, password);
+    if (mode === "signup") await signup(email, password);
     else await login(email, password);
     hideAuthOverlay();
     // Load everything from the API now that we're authed
@@ -573,9 +622,12 @@ authForm.addEventListener('submit', async e => {
 
 // On boot, only hide the overlay if we already have a token AND it still works.
 (async () => {
-  if (!authToken()) { showAuthOverlay(); return; }
+  if (!authToken()) {
+    showAuthOverlay();
+    return;
+  }
   try {
-    await apiListTemplates('front'); // ping; throws on 401
+    await apiListTemplates("front"); // ping; throws on 401
     hideAuthOverlay();
     await loadTemplates();
     await loadBackTemplates();
@@ -592,18 +644,18 @@ authForm.addEventListener('submit', async e => {
 
 ## 6. File map
 
-| File | Purpose |
-|---|---|
-| `index.js` | Express app, CORS, route mounting, error handling |
-| `routes/auth.js` | signup, login, logout |
-| `routes/templates.js` | upload/list/delete front+back+label images |
-| `routes/mockups.js` | save/list/delete generated JPEGs |
-| `routes/backgrounds.js` | upload/list/delete background images |
-| `middleware/auth.js` | validates Supabase JWT, attaches `req.user` and `req.jwt` |
-| `middleware/upload.js` | multer in-memory image upload, 8 MB cap, image MIME whitelist |
-| `supabase/client.js` | service + user-scoped Supabase client factory |
-| `render.yaml` | declarative Render deployment config |
-| `.env.example` | required env vars, documented |
+| File                    | Purpose                                                       |
+| ----------------------- | ------------------------------------------------------------- |
+| `index.js`              | Express app, CORS, route mounting, error handling             |
+| `routes/auth.js`        | signup, login, logout                                         |
+| `routes/templates.js`   | upload/list/delete front+back+label images                    |
+| `routes/mockups.js`     | save/list/delete generated JPEGs                              |
+| `routes/backgrounds.js` | upload/list/delete background images                          |
+| `middleware/auth.js`    | validates Supabase JWT, attaches `req.user` and `req.jwt`     |
+| `middleware/upload.js`  | multer in-memory image upload, 8 MB cap, image MIME whitelist |
+| `supabase/client.js`    | service + user-scoped Supabase client factory                 |
+| `render.yaml`           | declarative Render deployment config                          |
+| `.env.example`          | required env vars, documented                                 |
 
 ---
 
