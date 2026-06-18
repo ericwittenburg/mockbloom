@@ -196,6 +196,14 @@ create policy "mockups_bucket_delete_own"
   using (bucket_id = 'mockups' and (storage.foldername(name))[1] = auth.uid()::text);
 ```
 
+3. Then run this second query to grant the Supabase roles access to the tables (required — without this every insert/select returns `permission denied`):
+
+```sql
+GRANT ALL ON public.templates TO anon, authenticated, service_role;
+GRANT ALL ON public.mockups TO anon, authenticated, service_role;
+GRANT ALL ON public.backgrounds TO anon, authenticated, service_role;
+```
+
 If everything ran without errors, you should see three tables under **Database → Tables** and policies under **Authentication → Policies**.
 
 ### 1.5 (Optional) Disable email confirmation for fast local testing
