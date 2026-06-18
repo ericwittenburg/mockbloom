@@ -108,6 +108,33 @@ body { font-family: 'Inter', system-ui, sans-serif; height: 100vh; overflow: hid
 .side-btn { background: none; border: none; color: var(--text-2); font: 11px 'Inter', sans-serif; font-weight: 600; padding: 4px 10px; border-radius: 6px; cursor: pointer; transition: background 0.15s, color 0.15s; white-space: nowrap; }
 .side-btn.active { background: var(--surface-3); color: var(--text); }
 
+/* ── Auth overlay ── */
+#authOverlay {
+  position: fixed; inset: 0; z-index: 9999;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg);
+}
+.auth-card {
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: 14px;
+  padding: 32px; width: 320px; display: flex; flex-direction: column; gap: 14px;
+  box-shadow: 0 12px 48px rgba(0,0,0,0.4);
+}
+.auth-card .brand { font-size: 24px; }
+.auth-card .auth-sub { color: var(--text-3); font-size: 12px; margin-bottom: 4px; }
+.auth-card input {
+  background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
+  border-radius: 8px; padding: 10px 12px; font: 13px 'Inter', sans-serif; outline: none;
+  transition: border-color 0.15s;
+}
+.auth-card input:focus { border-color: var(--accent); }
+.auth-card .auth-buttons { display: flex; gap: 8px; margin-top: 4px; }
+.auth-card .auth-buttons button { flex: 1; padding: 10px 12px; border-radius: 8px; border: none; font: 600 13px 'Inter', sans-serif; cursor: pointer; transition: transform 0.1s, box-shadow 0.15s; }
+.auth-card .auth-buttons button[data-mode="login"] { background: var(--accent-grad); color: #fff; }
+.auth-card .auth-buttons button[data-mode="login"]:hover { box-shadow: 0 4px 16px rgba(255,107,107,0.3); }
+.auth-card .auth-buttons button[data-mode="signup"] { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+.auth-card .auth-buttons button[data-mode="signup"]:hover { background: var(--surface-3); }
+.auth-card .auth-error { color: var(--accent); font-size: 12px; min-height: 16px; }
+
 /* ── Sync section ── */
 .sync-section { border-bottom: none; margin-top: auto; border-top: 1px solid var(--border); }
 .sync-row { display: flex; gap: 8px; margin-bottom: 8px; }
@@ -271,6 +298,14 @@ body { font-family: 'Inter', system-ui, sans-serif; height: 100vh; overflow: hid
   cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s; font-family: inherit;
 }
 .mockup-card-footer button:hover { box-shadow: 0 4px 12px rgba(255,107,107,0.3); }
+.mockup-card-footer .actions { display: flex; gap: 8px; align-items: center; }
+.mockup-card-footer .save-btn { background: var(--surface-3); color: var(--text); border: 1px solid var(--border); }
+.mockup-card-footer .save-btn:hover { background: var(--border); box-shadow: none; }
+.mockup-card-footer .save-btn.saved,
+.mockup-card-footer .save-btn:disabled { background: var(--surface-2); color: var(--text-3); cursor: default; }
+.mockup-card-footer .save-btn.saved:hover,
+.mockup-card-footer .save-btn:disabled:hover { background: var(--surface-2); box-shadow: none; }
+.mockup-card-footer .save-error { color: var(--accent); font-size: 11px; }
 #genInfo { margin-left: auto; font-size: 12px; color: var(--text-3); }
 
 /* ── Scrollbar ── */
@@ -283,6 +318,21 @@ body { font-family: 'Inter', system-ui, sans-serif; height: 100vh; overflow: hid
 </style>
 </head>
 <body>
+
+<!-- Auth overlay — covers the app until the user is authenticated -->
+<div id="authOverlay">
+  <form id="authForm" class="auth-card">
+    <span class="brand">MockBloom</span>
+    <span class="auth-sub">Sign in to continue</span>
+    <input id="authEmail" type="email" placeholder="Email" autocomplete="email" required>
+    <input id="authPassword" type="password" placeholder="Password" autocomplete="current-password" minlength="6" required>
+    <div class="auth-buttons">
+      <button type="submit" data-mode="login">Log in</button>
+      <button type="submit" data-mode="signup">Sign up</button>
+    </div>
+    <div id="authError" class="auth-error"></div>
+  </form>
+</div>
 
 <!-- Top bar -->
 <div id="topBar">
@@ -421,6 +471,124 @@ body { font-family: 'Inter', system-ui, sans-serif; height: 100vh; overflow: hid
 </div><!-- /workspace -->
 
 <script>
+// ===================== API CONFIG =====================
+// Base URL of the MockBloom backend. Swap to the deployed Render URL in production.
+const API_BASE = 'http://localhost:3001/api/v1';
+
+// Auth token storage — Supabase JWT lives in localStorage so it survives reloads.
+function authToken() {
+  return localStorage.getItem('mb_token') || '';
+}
+function setAuthToken(token) {
+  if (token) localStorage.setItem('mb_token', token);
+  else localStorage.removeItem('mb_token');
+}
+function authHeaders() {
+  const t = authToken();
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
+// Single wrapper around fetch — adds the auth header, parses JSON, throws on non-2xx.
+// Do not set Content-Type for FormData bodies — multer needs the auto-generated boundary.
+async function apiFetch(path, opts = {}) {
+  const headers = { ...(opts.headers || {}), ...authHeaders() };
+  if (opts.body && !(opts.body instanceof FormData) && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
+  }
+  const res = await fetch(`${API_BASE}${path}`, { ...opts, headers });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed: ${res.status}`);
+  return data;
+}
+
+// ===================== API: AUTH =====================
+// Create a new account. With email confirmation off, session is returned immediately.
+async function signup(email, password) {
+  const { session } = await apiFetch('/auth/signup', {
+    method: 'POST',
+    body: JSON.stringify({ email, password })
+  });
+  if (session?.access_token) setAuthToken(session.access_token);
+  return session;
+}
+
+// Log in and persist the JWT for subsequent requests.
+async function login(email, password) {
+  const { session } = await apiFetch('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password })
+  });
+  setAuthToken(session.access_token);
+  return session;
+}
+
+// Log out server-side and clear the local token.
+async function logout() {
+  try { await apiFetch('/auth/logout', { method: 'POST' }); } catch {}
+  setAuthToken(null);
+}
+
+// ===================== API: TEMPLATES =====================
+// Upload one image (front, back, or label). sortHue is optional and only meaningful for front/back.
+async function apiUploadTemplate(file, name, kind, sortHue) {
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('name', name);
+  fd.append('kind', kind);
+  if (sortHue != null) fd.append('sortHue', String(sortHue));
+  const { template } = await apiFetch('/templates', { method: 'POST', body: fd });
+  return template;
+}
+
+// List templates for the logged-in user, optionally filtered by kind.
+async function apiListTemplates(kind) {
+  const q = kind ? `?kind=${encodeURIComponent(kind)}` : '';
+  const { templates } = await apiFetch(`/templates${q}`);
+  return templates;
+}
+
+async function apiDeleteTemplate(id) {
+  await apiFetch(`/templates/${id}`, { method: 'DELETE' });
+}
+
+// ===================== API: MOCKUPS =====================
+// Persist a generated mockup. `dataUrl` is what canvas.toDataURL('image/jpeg', ...) returns.
+async function apiSaveMockup(name, dataUrl) {
+  const blob = await (await fetch(dataUrl)).blob();
+  const fd = new FormData();
+  fd.append('name', name);
+  fd.append('file', blob, `${name}.jpg`);
+  const { mockup } = await apiFetch('/mockups', { method: 'POST', body: fd });
+  return mockup;
+}
+
+async function apiListMockups() {
+  const { mockups } = await apiFetch('/mockups');
+  return mockups;
+}
+
+async function apiDeleteMockup(id) {
+  await apiFetch(`/mockups/${id}`, { method: 'DELETE' });
+}
+
+// ===================== API: BACKGROUNDS =====================
+async function apiUploadBackground(file, name) {
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('name', name);
+  const { background } = await apiFetch('/backgrounds', { method: 'POST', body: fd });
+  return background;
+}
+
+async function apiListBackgrounds() {
+  const { backgrounds } = await apiFetch('/backgrounds');
+  return backgrounds;
+}
+
+async function apiDeleteBackground(id) {
+  await apiFetch(`/backgrounds/${id}`, { method: 'DELETE' });
+}
+
 // ===================== STORAGE (IndexedDB) =====================
 const DB_NAME = 'MockupGenDB';
 const DB_VER = 3;
@@ -486,7 +654,15 @@ function fileToDataUrl(file) {
 }
 
 function loadImg(src) {
-  return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+  // crossOrigin='anonymous' lets us draw Supabase-signed URLs onto the canvas without
+  // tainting it (toDataURL would otherwise throw). Harmless for data URLs.
+  return new Promise((res, rej) => {
+    const i = new Image();
+    i.crossOrigin = 'anonymous';
+    i.onload = () => res(i);
+    i.onerror = rej;
+    i.src = src;
+  });
 }
 
 function baseName(file) { return file.name.replace(/\.[^.]+$/, ''); }
@@ -668,18 +844,18 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 
 // ===================== TEMPLATES =====================
 async function loadTemplates() {
-  const rows = await dbAll('templates');
+  const rows = await apiListTemplates('front');
+  // Map API row shape → in-memory shape. The signed URL works anywhere dataUrl/blobUrl/thumbUrl were used.
   templates = rows.map(t => ({
-    ...t,
-    blobUrl: mkBlobUrl(t.dataUrl),
-    thumbUrl: t.thumbDataUrl ? mkBlobUrl(t.thumbDataUrl) : null
+    id: t.id,
+    name: t.name,
+    sortHue: t.sort_hue,
+    dataUrl: t.signedUrl,
+    blobUrl: t.signedUrl,
+    thumbUrl: t.signedUrl
   }));
-  // Sort immediately using stored hues — templates with hue render in order right away
   templates.sort((a, b) => (a.sortHue ?? 500) - (b.sortHue ?? 500));
   renderSwatches();
-  // Migrate legacy records missing thumbnail or sort hue
-  const needsMigration = templates.filter(t => !t.thumbUrl || t.sortHue == null);
-  if (needsMigration.length) generateThumbnailsIdle(needsMigration);
 }
 
 function generateThumbnailsIdle(queue) {
@@ -719,13 +895,18 @@ async function addTemplates(files) {
   for (let i = 0; i < files.length; i++) {
     progressText.textContent = `Processing ${i + 1} of ${total}…`;
     const f = files[i];
+    // Compute sortHue locally before upload so the API can store it for sorted retrieval.
     const dataUrl = await fileToDataUrl(f);
-    const name = baseName(f);
-    const thumbDataUrl = await makeThumbnailDataUrl(dataUrl);
     const sortHue = await computeSortHue(dataUrl);
-    const id = await dbAdd('templates', {name, dataUrl, thumbDataUrl, sortHue});
-    const thumbUrl = mkBlobUrl(thumbDataUrl);
-    templates.push({id, name, dataUrl, thumbDataUrl, sortHue, blobUrl: mkBlobUrl(dataUrl), thumbUrl});
+    const row = await apiUploadTemplate(f, baseName(f), 'front', sortHue);
+    templates.push({
+      id: row.id,
+      name: row.name,
+      sortHue: row.sort_hue,
+      dataUrl: row.signedUrl,
+      blobUrl: row.signedUrl,
+      thumbUrl: row.signedUrl
+    });
   }
   progress.classList.remove('visible');
   templates.sort((a, b) => (a.sortHue ?? 500) - (b.sortHue ?? 500));
@@ -735,12 +916,7 @@ async function addTemplates(files) {
 }
 
 async function removeTemplate(id) {
-  await dbDel('templates', id);
-  const t = templates.find(t => t.id === id);
-  if (t) {
-    if (t.blobUrl) URL.revokeObjectURL(t.blobUrl);
-    if (t.thumbUrl) URL.revokeObjectURL(t.thumbUrl);
-  }
+  await apiDeleteTemplate(id);
   templates = templates.filter(t => t.id !== id);
   selectedIds.delete(id);
   const el = templateGrid.querySelector(`[data-id="${id}"]`);
@@ -803,15 +979,17 @@ function updateSelectionCount() {
 
 // ===================== BACK TEMPLATES =====================
 async function loadBackTemplates() {
-  const rows = await dbAll('backTemplates');
+  const rows = await apiListTemplates('back');
   backTemplates = rows.map(t => ({
-    ...t,
-    blobUrl: mkBlobUrl(t.dataUrl),
-    thumbUrl: t.thumbDataUrl ? mkBlobUrl(t.thumbDataUrl) : null
+    id: t.id,
+    name: t.name,
+    sortHue: t.sort_hue,
+    dataUrl: t.signedUrl,
+    blobUrl: t.signedUrl,
+    thumbUrl: t.signedUrl
   }));
   backTemplates.sort((a, b) => (a.sortHue ?? 500) - (b.sortHue ?? 500));
-  const needsMigration = backTemplates.filter(t => !t.thumbUrl || t.sortHue == null);
-  if (needsMigration.length) generateThumbnailsIdleBack(needsMigration);
+  if (currentSide === 'back') renderSwatches();
 }
 
 function generateThumbnailsIdleBack(queue) {
@@ -850,12 +1028,16 @@ async function addBackTemplates(files) {
     progressText.textContent = `Processing ${i + 1} of ${total}…`;
     const f = files[i];
     const dataUrl = await fileToDataUrl(f);
-    const name = baseName(f);
-    const thumbDataUrl = await makeThumbnailDataUrl(dataUrl);
     const sortHue = await computeSortHue(dataUrl);
-    const id = await dbAdd('backTemplates', {name, dataUrl, thumbDataUrl, sortHue});
-    const thumbUrl = mkBlobUrl(thumbDataUrl);
-    backTemplates.push({id, name, dataUrl, thumbDataUrl, sortHue, blobUrl: mkBlobUrl(dataUrl), thumbUrl});
+    const row = await apiUploadTemplate(f, baseName(f), 'back', sortHue);
+    backTemplates.push({
+      id: row.id,
+      name: row.name,
+      sortHue: row.sort_hue,
+      dataUrl: row.signedUrl,
+      blobUrl: row.signedUrl,
+      thumbUrl: row.signedUrl
+    });
   }
   progress.classList.remove('visible');
   backTemplates.sort((a, b) => (a.sortHue ?? 500) - (b.sortHue ?? 500));
@@ -865,12 +1047,7 @@ async function addBackTemplates(files) {
 }
 
 async function removeBackTemplate(id) {
-  await dbDel('backTemplates', id);
-  const t = backTemplates.find(t => t.id === id);
-  if (t) {
-    if (t.blobUrl) URL.revokeObjectURL(t.blobUrl);
-    if (t.thumbUrl) URL.revokeObjectURL(t.thumbUrl);
-  }
+  await apiDeleteTemplate(id);
   backTemplates = backTemplates.filter(t => t.id !== id);
   backSelectedIds.delete(id);
   const el = templateGrid.querySelector(`[data-id="${id}"]`);
@@ -882,25 +1059,25 @@ async function removeBackTemplate(id) {
 
 // ===================== NECK LABELS =====================
 async function loadLabels() {
-  neckLabels = await dbAll('labels');
+  const rows = await apiListTemplates('label');
+  // Labels keep the same in-memory shape as before — `dataUrl` is the signed URL.
+  neckLabels = rows.map(l => ({ id: l.id, name: l.name, dataUrl: l.signedUrl }));
   if (neckLabels.length && activeLabelId === null) activeLabelId = neckLabels[0].id;
   renderLabels();
   await loadActiveLabelImg();
 }
 
 async function addLabel(file) {
-  const dataUrl = await fileToDataUrl(file);
-  const name = baseName(file);
-  const id = await dbAdd('labels', {name, dataUrl});
-  neckLabels.push({id, name, dataUrl});
-  if (neckLabels.length === 1) activeLabelId = id;
+  const row = await apiUploadTemplate(file, baseName(file), 'label');
+  neckLabels.push({ id: row.id, name: row.name, dataUrl: row.signedUrl });
+  if (neckLabels.length === 1) activeLabelId = row.id;
   renderLabels();
   await loadActiveLabelImg();
   updatePreview();
 }
 
 async function removeLabel(id) {
-  await dbDel('labels', id);
+  await apiDeleteTemplate(id);
   neckLabels = neckLabels.filter(l => l.id !== id);
   if (activeLabelId === id) activeLabelId = neckLabels.length ? neckLabels[0].id : null;
   renderLabels();
@@ -946,8 +1123,13 @@ async function loadActiveLabelImg() {
 
 // ===================== BACKGROUNDS =====================
 async function loadBackgrounds() {
-  const rows = await dbAll('backgrounds');
-  backgrounds = rows.map(b => ({...b, blobUrl: mkBlobUrl(b.dataUrl)}));
+  const rows = await apiListBackgrounds();
+  backgrounds = rows.map(b => ({
+    id: b.id,
+    name: b.name,
+    dataUrl: b.signedUrl,
+    blobUrl: b.signedUrl
+  }));
   if (backgrounds.length && activeBgId === null) activeBgId = backgrounds[0].id;
   renderBgSwatches();
   await loadActiveBgImg();
@@ -955,10 +1137,13 @@ async function loadBackgrounds() {
 
 async function addBackgrounds(files) {
   for (const f of files) {
-    const dataUrl = await fileToDataUrl(f);
-    const name = baseName(f);
-    const id = await dbAdd('backgrounds', {name, dataUrl});
-    backgrounds.push({id, name, dataUrl, blobUrl: mkBlobUrl(dataUrl)});
+    const row = await apiUploadBackground(f, baseName(f));
+    backgrounds.push({
+      id: row.id,
+      name: row.name,
+      dataUrl: row.signedUrl,
+      blobUrl: row.signedUrl
+    });
   }
   if (backgrounds.length && activeBgId === null) activeBgId = backgrounds[0].id;
   renderBgSwatches();
@@ -967,9 +1152,7 @@ async function addBackgrounds(files) {
 }
 
 async function removeBackground(id) {
-  await dbDel('backgrounds', id);
-  const b = backgrounds.find(b => b.id === id);
-  if (b && b.blobUrl) URL.revokeObjectURL(b.blobUrl);
+  await apiDeleteBackground(id);
   backgrounds = backgrounds.filter(b => b.id !== id);
   if (activeBgId === id) activeBgId = backgrounds.length ? backgrounds[0].id : null;
   renderBgSwatches();
@@ -1578,15 +1761,49 @@ function addMockupCard(label, dataUrl, downloadName) {
   const img = document.createElement('img');
   img.src = dataUrl;
   card.appendChild(img);
+
   const footer = document.createElement('div');
   footer.className = 'mockup-card-footer';
   const span = document.createElement('span');
   span.textContent = label;
   footer.appendChild(span);
-  const btn = document.createElement('button');
-  btn.textContent = 'Download';
-  btn.addEventListener('click', () => downloadJpeg(dataUrl, downloadName));
-  footer.appendChild(btn);
+
+  const actions = document.createElement('div');
+  actions.className = 'actions';
+
+  // Inline error label — populated only on save failure, cleared on next attempt.
+  const err = document.createElement('span');
+  err.className = 'save-error';
+  actions.appendChild(err);
+
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'save-btn';
+  saveBtn.textContent = 'Save';
+  saveBtn.addEventListener('click', async () => {
+    err.textContent = '';
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving…';
+    try {
+      await apiSaveMockup(label, dataUrl);
+      saveBtn.textContent = 'Saved';
+      saveBtn.classList.add('saved');
+      // Stays disabled — prevents accidental duplicate saves.
+    } catch (e) {
+      err.textContent = 'Save failed';
+      saveBtn.textContent = 'Save';
+      saveBtn.disabled = false;
+      // Auto-clear the inline error after a moment so it doesn't linger.
+      setTimeout(() => { err.textContent = ''; }, 4000);
+    }
+  });
+  actions.appendChild(saveBtn);
+
+  const dlBtn = document.createElement('button');
+  dlBtn.textContent = 'Download';
+  dlBtn.addEventListener('click', () => downloadJpeg(dataUrl, downloadName));
+  actions.appendChild(dlBtn);
+
+  footer.appendChild(actions);
   card.appendChild(footer);
   mockupCards.appendChild(card);
 }
@@ -1737,7 +1954,47 @@ async function init() {
   await loadBackgrounds();
   updateBtn();
 }
-init();
+
+// ===================== AUTH OVERLAY =====================
+const authOverlay = document.getElementById('authOverlay');
+const authForm = document.getElementById('authForm');
+const authError = document.getElementById('authError');
+
+function showAuthOverlay() { authOverlay.style.display = 'flex'; }
+function hideAuthOverlay() { authOverlay.style.display = 'none'; }
+
+authForm.addEventListener('submit', async e => {
+  e.preventDefault();
+  authError.textContent = '';
+  const mode = e.submitter?.dataset.mode || 'login';
+  const email = document.getElementById('authEmail').value;
+  const password = document.getElementById('authPassword').value;
+  try {
+    if (mode === 'signup') await signup(email, password);
+    else await login(email, password);
+    if (!authToken()) {
+      // Signup succeeded but email confirmation is required — no session returned.
+      authError.textContent = 'Account created. Check your email to confirm, then log in.';
+      return;
+    }
+    hideAuthOverlay();
+    await init();
+  } catch (err) {
+    authError.textContent = err.message;
+  }
+});
+
+// Boot: if we have a token, try loading; if it fails (expired/invalid), show the overlay.
+(async () => {
+  if (!authToken()) { showAuthOverlay(); return; }
+  try {
+    await init();
+    hideAuthOverlay();
+  } catch {
+    setAuthToken(null);
+    showAuthOverlay();
+  }
+})();
 </script>
 </body>
 </html>
