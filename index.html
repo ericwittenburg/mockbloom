@@ -169,6 +169,13 @@ body { font-family: 'Inter', system-ui, sans-serif; height: 100vh; overflow: hid
   border: 2px solid var(--border-light); border-top-color: var(--accent);
   animation: spin 0.7s linear infinite;
 }
+.upload-progress-bar {
+  flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; min-width: 60px;
+}
+.upload-progress-fill {
+  height: 100%; background: var(--accent); border-radius: 2px;
+  transition: width 0.15s ease; width: 0%;
+}
 
 /* ── Search bar ── */
 .search-bar { position: relative; flex-shrink: 0; }
@@ -406,6 +413,7 @@ body { font-family: 'Inter', system-ui, sans-serif; height: 100vh; overflow: hid
       <div class="swatch-grid" id="templateGrid"></div>
       <div class="upload-progress" id="uploadProgress">
         <div class="upload-spinner"></div>
+        <div class="upload-progress-bar"><div class="upload-progress-fill" id="uploadProgressFill"></div></div>
         <span id="uploadProgressText"></span>
       </div>
       <div class="info-row">
@@ -927,24 +935,32 @@ function generateThumbnailsIdle(queue) {
 
 async function addTemplates(files) {
   const progress = $('uploadProgress'), progressText = $('uploadProgressText');
+  const fill = $('uploadProgressFill');
   const total = files.length;
+  let completed = 0;
   progress.classList.add('visible');
-  for (let i = 0; i < files.length; i++) {
-    progressText.textContent = `Processing ${i + 1} of ${total}…`;
-    const f = files[i];
-    // Compute sortHue locally before upload so the API can store it for sorted retrieval.
-    const dataUrl = await fileToDataUrl(f);
-    const sortHue = await computeSortHue(dataUrl);
-    const row = await apiUploadTemplate(f, baseName(f), 'front', sortHue);
-    templates.push({
-      id: row.id,
-      name: row.name,
-      sortHue: row.sort_hue,
-      dataUrl: row.signedUrl,
-      blobUrl: row.signedUrl,
-      thumbUrl: row.signedUrl
-    });
+  fill.style.width = '0%';
+
+  const queue = [...files];
+  async function worker() {
+    while (queue.length > 0) {
+      const f = queue.shift();
+      const dataUrl = await fileToDataUrl(f);
+      const sortHue = await computeSortHue(dataUrl);
+      const row = await apiUploadTemplate(f, baseName(f), 'front', sortHue);
+      const t = { id: row.id, name: row.name, sortHue: row.sort_hue,
+                  dataUrl: row.signedUrl, blobUrl: row.signedUrl, thumbUrl: row.signedUrl };
+      templates.push(t);
+      // Show swatch immediately so the user sees progress.
+      if (currentSide === 'front') templateGrid.appendChild(buildSwatch(t));
+      completed++;
+      const pct = Math.round((completed / total) * 100);
+      fill.style.width = `${pct}%`;
+      progressText.textContent = `Uploaded ${completed} of ${total}`;
+    }
   }
+
+  await Promise.all(Array.from({ length: Math.min(5, total) }, worker));
   progress.classList.remove('visible');
   templates.sort((a, b) => (a.sortHue ?? 500) - (b.sortHue ?? 500));
   renderSwatches();
@@ -1059,23 +1075,31 @@ function generateThumbnailsIdleBack(queue) {
 
 async function addBackTemplates(files) {
   const progress = $('uploadProgress'), progressText = $('uploadProgressText');
+  const fill = $('uploadProgressFill');
   const total = files.length;
+  let completed = 0;
   progress.classList.add('visible');
-  for (let i = 0; i < files.length; i++) {
-    progressText.textContent = `Processing ${i + 1} of ${total}…`;
-    const f = files[i];
-    const dataUrl = await fileToDataUrl(f);
-    const sortHue = await computeSortHue(dataUrl);
-    const row = await apiUploadTemplate(f, baseName(f), 'back', sortHue);
-    backTemplates.push({
-      id: row.id,
-      name: row.name,
-      sortHue: row.sort_hue,
-      dataUrl: row.signedUrl,
-      blobUrl: row.signedUrl,
-      thumbUrl: row.signedUrl
-    });
+  fill.style.width = '0%';
+
+  const queue = [...files];
+  async function worker() {
+    while (queue.length > 0) {
+      const f = queue.shift();
+      const dataUrl = await fileToDataUrl(f);
+      const sortHue = await computeSortHue(dataUrl);
+      const row = await apiUploadTemplate(f, baseName(f), 'back', sortHue);
+      const t = { id: row.id, name: row.name, sortHue: row.sort_hue,
+                  dataUrl: row.signedUrl, blobUrl: row.signedUrl, thumbUrl: row.signedUrl };
+      backTemplates.push(t);
+      if (currentSide === 'back') templateGrid.appendChild(buildSwatch(t));
+      completed++;
+      const pct = Math.round((completed / total) * 100);
+      fill.style.width = `${pct}%`;
+      progressText.textContent = `Uploaded ${completed} of ${total}`;
+    }
   }
+
+  await Promise.all(Array.from({ length: Math.min(5, total) }, worker));
   progress.classList.remove('visible');
   backTemplates.sort((a, b) => (a.sortHue ?? 500) - (b.sortHue ?? 500));
   if (currentSide === 'back') renderSwatches();
