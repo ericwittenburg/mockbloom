@@ -497,7 +497,11 @@ async function apiFetch(path, opts = {}) {
   }
   const res = await fetch(`${API_BASE}${path}`, { ...opts, headers });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `Request failed: ${res.status}`);
+  if (!res.ok) {
+    const err = new Error(data.error || `Request failed: ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
   return data;
 }
 
@@ -1984,15 +1988,24 @@ authForm.addEventListener('submit', async e => {
   }
 });
 
-// Boot: if we have a token, try loading; if it fails (expired/invalid), show the overlay.
+// Boot: ping the server first (wakes Render free-tier from sleep), then load if we have a token.
+// Only clear the token on 401 — network errors should not force re-login.
 (async () => {
+  // Fire-and-forget wake ping so the server is warm before init() hits it.
+  fetch(`${API_BASE.replace('/api/v1', '')}/`).catch(() => {});
+
   if (!authToken()) { showAuthOverlay(); return; }
   try {
     await init();
     hideAuthOverlay();
-  } catch {
-    setAuthToken(null);
-    showAuthOverlay();
+  } catch (err) {
+    if (err.status === 401) {
+      setAuthToken(null);
+      showAuthOverlay();
+    } else {
+      showAuthOverlay();
+      authError.textContent = 'Could not reach server. Check your connection and try again.';
+    }
   }
 })();
 </script>
