@@ -576,32 +576,38 @@ async function logout() {
 // ===================== API: TEMPLATES =====================
 // Upload one image (front, back, or label). sortHue is optional and only meaningful for front/back.
 async function apiUploadTemplate(file, name, kind, sortHue) {
-  const ext = (file.name.split('.').pop() || 'png').toLowerCase();
-
-  // Step 1: get a signed upload URL from our server (tiny JSON request, no file bytes).
-  const { signedUploadUrl, path } = await apiFetch('/templates/upload-url', {
-    method: 'POST',
-    body: JSON.stringify({ name, kind, ext })
-  });
-
-  // Step 2: upload the file directly from the browser to Supabase Storage.
-  // Render never sees the file bytes — this is what makes it fast.
-  const uploadRes = await fetch(signedUploadUrl, {
-    method: 'PUT',
-    headers: { 'Content-Type': file.type || 'image/png' },
-    body: file
-  });
-  if (!uploadRes.ok) {
-    const msg = await uploadRes.text().catch(() => uploadRes.status);
-    throw new Error(`Storage upload failed: ${msg}`);
+  // Fast path: browser uploads directly to Supabase, bypassing Render entirely.
+  try {
+    const ext = (file.name.split('.').pop() || 'png').toLowerCase();
+    const { signedUploadUrl, path } = await apiFetch('/templates/upload-url', {
+      method: 'POST',
+      body: JSON.stringify({ name, kind, ext })
+    });
+    const uploadRes = await Promise.race([
+      fetch(signedUploadUrl, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type || 'image/png' },
+        body: file
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('direct upload timed out')), 15000))
+    ]);
+    if (!uploadRes.ok) throw new Error(`Storage PUT failed: ${uploadRes.status}`);
+    const { template } = await apiFetch('/templates/register', {
+      method: 'POST',
+      body: JSON.stringify({ name, kind, sortHue, path })
+    });
+    return template;
+  } catch (e) {
+    // Fallback: route through Render server (slower but always works).
+    console.warn('Direct upload failed, falling back to server upload:', e.message);
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('name', name);
+    fd.append('kind', kind);
+    if (sortHue != null) fd.append('sortHue', String(sortHue));
+    const { template } = await apiFetch('/templates', { method: 'POST', body: fd });
+    return template;
   }
-
-  // Step 3: register the path + metadata in our DB (tiny JSON request).
-  const { template } = await apiFetch('/templates/register', {
-    method: 'POST',
-    body: JSON.stringify({ name, kind, sortHue, path })
-  });
-  return template;
 }
 
 // List templates for the logged-in user, optionally filtered by kind.
@@ -748,16 +754,18 @@ async function computeSortHue(src) {
   c.width = size; c.height = size;
   const cx = c.getContext('2d');
   try {
-    // File/Blob: createImageBitmap takes it directly — no FileReader or data URL needed.
     const source = (src instanceof File || src instanceof Blob)
-      ? src
-      : await fetch(src).then(r => r.blob());
-    const bitmap = await createImageBitmap(source, { resizeWidth: size, resizeHeight: size });
-    cx.drawImage(bitmap, 0, 0);
+      ? src : await fetch(src).then(r => r.blob());
+    const bitmap = await createImageBitmap(source);
+    cx.drawImage(bitmap, 0, 0, size, size);
     bitmap.close();
   } catch {
-    const img = await loadImg(typeof src === 'string' ? src : URL.createObjectURL(src));
-    cx.drawImage(img, 0, 0, size, size);
+    try {
+      const url = (src instanceof File || src instanceof Blob) ? URL.createObjectURL(src) : src;
+      const img = await loadImg(url);
+      cx.drawImage(img, 0, 0, size, size);
+      if (src instanceof File || src instanceof Blob) URL.revokeObjectURL(url);
+    } catch { return 500; }
   }
   const data = cx.getImageData(0, 0, size, size).data;
   let sinSum = 0, cosSum = 0, colorPx = 0, totalL = 0, opaquePx = 0;
@@ -958,29 +966,44 @@ async function addTemplates(files) {
   const progress = $('uploadProgress'), progressText = $('uploadProgressText');
   const fill = $('uploadProgressFill');
   const total = files.length;
-  let completed = 0;
+  let completed = 0, failed = 0;
   progress.classList.add('visible');
   fill.style.width = '0%';
   progressText.textContent = `Uploading 0 of ${total}…`;
 
   const queue = [...files];
+  function updateProgress() {
+    const done = completed + failed;
+    fill.style.width = `${Math.round((done / total) * 100)}%`;
+    progressText.textContent = failed > 0
+      ? `Uploaded ${completed} of ${total} (${failed} failed)`
+      : `Uploaded ${completed} of ${total}`;
+  }
+
   async function worker() {
     while (queue.length > 0) {
       const f = queue.shift();
-      // Pass the File directly — no FileReader/data URL conversion needed.
-      const sortHue = await computeSortHue(f);
-      const row = await apiUploadTemplate(f, baseName(f), 'front', sortHue);
-      const t = { id: row.id, name: row.name, sortHue: row.sort_hue,
-                  dataUrl: row.signedUrl, blobUrl: row.signedUrl, thumbUrl: row.signedUrl };
-      templates.push(t);
-      if (currentSide === 'front') templateGrid.appendChild(buildSwatch(t));
-      completed++;
-      fill.style.width = `${Math.round((completed / total) * 100)}%`;
-      progressText.textContent = `Uploaded ${completed} of ${total}`;
+      try {
+        const sortHue = await computeSortHue(f);
+        const row = await apiUploadTemplate(f, baseName(f), 'front', sortHue);
+        const t = { id: row.id, name: row.name, sortHue: row.sort_hue,
+                    dataUrl: row.signedUrl, blobUrl: row.signedUrl, thumbUrl: row.signedUrl };
+        templates.push(t);
+        if (currentSide === 'front') templateGrid.appendChild(buildSwatch(t));
+        completed++;
+      } catch (e) {
+        console.error('Template upload failed:', f.name, e.message);
+        failed++;
+      }
+      updateProgress();
     }
   }
 
-  await Promise.all(Array.from({ length: Math.min(10, total) }, worker));
+  try {
+    await Promise.all(Array.from({ length: Math.min(10, total) }, worker));
+  } catch (e) {
+    console.error('Upload pool error:', e);
+  }
   progress.classList.remove('visible');
   templates.sort((a, b) => (a.sortHue ?? 500) - (b.sortHue ?? 500));
   renderSwatches();
@@ -1097,28 +1120,44 @@ async function addBackTemplates(files) {
   const progress = $('uploadProgress'), progressText = $('uploadProgressText');
   const fill = $('uploadProgressFill');
   const total = files.length;
-  let completed = 0;
+  let completed = 0, failed = 0;
   progress.classList.add('visible');
   fill.style.width = '0%';
   progressText.textContent = `Uploading 0 of ${total}…`;
 
   const queue = [...files];
+  function updateProgress() {
+    const done = completed + failed;
+    fill.style.width = `${Math.round((done / total) * 100)}%`;
+    progressText.textContent = failed > 0
+      ? `Uploaded ${completed} of ${total} (${failed} failed)`
+      : `Uploaded ${completed} of ${total}`;
+  }
+
   async function worker() {
     while (queue.length > 0) {
       const f = queue.shift();
-      const sortHue = await computeSortHue(f);
-      const row = await apiUploadTemplate(f, baseName(f), 'back', sortHue);
-      const t = { id: row.id, name: row.name, sortHue: row.sort_hue,
-                  dataUrl: row.signedUrl, blobUrl: row.signedUrl, thumbUrl: row.signedUrl };
-      backTemplates.push(t);
-      if (currentSide === 'back') templateGrid.appendChild(buildSwatch(t));
-      completed++;
-      fill.style.width = `${Math.round((completed / total) * 100)}%`;
-      progressText.textContent = `Uploaded ${completed} of ${total}`;
+      try {
+        const sortHue = await computeSortHue(f);
+        const row = await apiUploadTemplate(f, baseName(f), 'back', sortHue);
+        const t = { id: row.id, name: row.name, sortHue: row.sort_hue,
+                    dataUrl: row.signedUrl, blobUrl: row.signedUrl, thumbUrl: row.signedUrl };
+        backTemplates.push(t);
+        if (currentSide === 'back') templateGrid.appendChild(buildSwatch(t));
+        completed++;
+      } catch (e) {
+        console.error('Template upload failed:', f.name, e.message);
+        failed++;
+      }
+      updateProgress();
     }
   }
 
-  await Promise.all(Array.from({ length: Math.min(10, total) }, worker));
+  try {
+    await Promise.all(Array.from({ length: Math.min(10, total) }, worker));
+  } catch (e) {
+    console.error('Upload pool error:', e);
+  }
   progress.classList.remove('visible');
   backTemplates.sort((a, b) => (a.sortHue ?? 500) - (b.sortHue ?? 500));
   if (currentSide === 'back') renderSwatches();
