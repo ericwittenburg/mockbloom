@@ -511,6 +511,15 @@ function authHeaders() {
   const t = authToken();
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
+// Decode the JWT locally and check the exp claim — no network call needed.
+function isTokenValid() {
+  const t = authToken();
+  if (!t) return false;
+  try {
+    const payload = JSON.parse(atob(t.split('.')[1]));
+    return typeof payload.exp === 'number' && payload.exp > Date.now() / 1000 + 30;
+  } catch { return false; }
+}
 
 // Single wrapper around fetch — adds the auth header, parses JSON, throws on non-2xx.
 // Do not set Content-Type for FormData bodies — multer needs the auto-generated boundary.
@@ -2015,33 +2024,26 @@ authForm.addEventListener('submit', async e => {
 });
 
 (async () => {
-  if (!authToken()) { showAuthOverlay(); return; }
-
-  // Retry init() up to 4 times — Render free tier can take ~30s to cold-start.
-  const delays = [0, 8000, 12000, 15000];
-  for (let i = 0; i < delays.length; i++) {
-    if (delays[i]) {
-      connectingMsg.textContent = `Waking up server… (${i}/${delays.length - 1})`;
-      await new Promise(r => setTimeout(r, delays[i]));
-    }
-    try {
-      connectingMsg.textContent = 'Connecting…';
-      await init();
-      hideAuthOverlay();
-      return;
-    } catch (err) {
-      if (err.status === 401) {
-        setAuthToken(null);
-        showAuthOverlay();
-        return;
-      }
-      // Network error — loop and retry
-    }
+  // Validate the token locally — no network call, so the app appears instantly on refresh.
+  if (!isTokenValid()) {
+    setAuthToken(null);
+    showAuthOverlay();
+    return;
   }
 
-  // All retries exhausted — show login screen without clearing the token.
-  showAuthOverlay();
-  authError.textContent = 'Server is unavailable. Please try again in a moment.';
+  // Token is valid: show the app immediately, then load data in the background.
+  hideAuthOverlay();
+  try {
+    await init();
+  } catch (err) {
+    // Only force re-login if the server explicitly rejects the token.
+    if (err.status === 401) {
+      setAuthToken(null);
+      showAuthOverlay();
+    }
+    // Any other error (server cold-starting, network blip) is ignored —
+    // the user stays logged in and can retry by refreshing once the server is up.
+  }
 })();
 </script>
 </body>
