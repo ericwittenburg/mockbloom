@@ -576,12 +576,31 @@ async function logout() {
 // ===================== API: TEMPLATES =====================
 // Upload one image (front, back, or label). sortHue is optional and only meaningful for front/back.
 async function apiUploadTemplate(file, name, kind, sortHue) {
-  const fd = new FormData();
-  fd.append('file', file);
-  fd.append('name', name);
-  fd.append('kind', kind);
-  if (sortHue != null) fd.append('sortHue', String(sortHue));
-  const { template } = await apiFetch('/templates', { method: 'POST', body: fd });
+  const ext = (file.name.split('.').pop() || 'png').toLowerCase();
+
+  // Step 1: get a signed upload URL from our server (tiny JSON request, no file bytes).
+  const { signedUploadUrl, path } = await apiFetch('/templates/upload-url', {
+    method: 'POST',
+    body: JSON.stringify({ name, kind, ext })
+  });
+
+  // Step 2: upload the file directly from the browser to Supabase Storage.
+  // Render never sees the file bytes — this is what makes it fast.
+  const uploadRes = await fetch(signedUploadUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': file.type || 'image/png' },
+    body: file
+  });
+  if (!uploadRes.ok) {
+    const msg = await uploadRes.text().catch(() => uploadRes.status);
+    throw new Error(`Storage upload failed: ${msg}`);
+  }
+
+  // Step 3: register the path + metadata in our DB (tiny JSON request).
+  const { template } = await apiFetch('/templates/register', {
+    method: 'POST',
+    body: JSON.stringify({ name, kind, sortHue, path })
+  });
   return template;
 }
 
@@ -721,21 +740,23 @@ function mkBlobUrl(dataUrl) {
   return URL.createObjectURL(new Blob([bytes], {type: mime}));
 }
 
-// Extract dominant hue from image for color sorting.
+// Extract dominant hue from an image source (File, Blob, or data URL) for color sorting.
 // Returns 0–360 for colorful shirts, 1000–1100 for achromatics (dark→light).
-async function computeSortHue(dataUrl) {
+async function computeSortHue(src) {
   const size = 32;
   const c = document.createElement('canvas');
   c.width = size; c.height = size;
   const cx = c.getContext('2d');
   try {
-    const resp = await fetch(dataUrl);
-    const blob = await resp.blob();
-    const bitmap = await createImageBitmap(blob, {resizeWidth: size, resizeHeight: size});
+    // File/Blob: createImageBitmap takes it directly — no FileReader or data URL needed.
+    const source = (src instanceof File || src instanceof Blob)
+      ? src
+      : await fetch(src).then(r => r.blob());
+    const bitmap = await createImageBitmap(source, { resizeWidth: size, resizeHeight: size });
     cx.drawImage(bitmap, 0, 0);
     bitmap.close();
   } catch {
-    const img = await loadImg(dataUrl);
+    const img = await loadImg(typeof src === 'string' ? src : URL.createObjectURL(src));
     cx.drawImage(img, 0, 0, size, size);
   }
   const data = cx.getImageData(0, 0, size, size).data;
@@ -940,27 +961,26 @@ async function addTemplates(files) {
   let completed = 0;
   progress.classList.add('visible');
   fill.style.width = '0%';
+  progressText.textContent = `Uploading 0 of ${total}…`;
 
   const queue = [...files];
   async function worker() {
     while (queue.length > 0) {
       const f = queue.shift();
-      const dataUrl = await fileToDataUrl(f);
-      const sortHue = await computeSortHue(dataUrl);
+      // Pass the File directly — no FileReader/data URL conversion needed.
+      const sortHue = await computeSortHue(f);
       const row = await apiUploadTemplate(f, baseName(f), 'front', sortHue);
       const t = { id: row.id, name: row.name, sortHue: row.sort_hue,
                   dataUrl: row.signedUrl, blobUrl: row.signedUrl, thumbUrl: row.signedUrl };
       templates.push(t);
-      // Show swatch immediately so the user sees progress.
       if (currentSide === 'front') templateGrid.appendChild(buildSwatch(t));
       completed++;
-      const pct = Math.round((completed / total) * 100);
-      fill.style.width = `${pct}%`;
+      fill.style.width = `${Math.round((completed / total) * 100)}%`;
       progressText.textContent = `Uploaded ${completed} of ${total}`;
     }
   }
 
-  await Promise.all(Array.from({ length: Math.min(5, total) }, worker));
+  await Promise.all(Array.from({ length: Math.min(10, total) }, worker));
   progress.classList.remove('visible');
   templates.sort((a, b) => (a.sortHue ?? 500) - (b.sortHue ?? 500));
   renderSwatches();
@@ -1080,26 +1100,25 @@ async function addBackTemplates(files) {
   let completed = 0;
   progress.classList.add('visible');
   fill.style.width = '0%';
+  progressText.textContent = `Uploading 0 of ${total}…`;
 
   const queue = [...files];
   async function worker() {
     while (queue.length > 0) {
       const f = queue.shift();
-      const dataUrl = await fileToDataUrl(f);
-      const sortHue = await computeSortHue(dataUrl);
+      const sortHue = await computeSortHue(f);
       const row = await apiUploadTemplate(f, baseName(f), 'back', sortHue);
       const t = { id: row.id, name: row.name, sortHue: row.sort_hue,
                   dataUrl: row.signedUrl, blobUrl: row.signedUrl, thumbUrl: row.signedUrl };
       backTemplates.push(t);
       if (currentSide === 'back') templateGrid.appendChild(buildSwatch(t));
       completed++;
-      const pct = Math.round((completed / total) * 100);
-      fill.style.width = `${pct}%`;
+      fill.style.width = `${Math.round((completed / total) * 100)}%`;
       progressText.textContent = `Uploaded ${completed} of ${total}`;
     }
   }
 
-  await Promise.all(Array.from({ length: Math.min(5, total) }, worker));
+  await Promise.all(Array.from({ length: Math.min(10, total) }, worker));
   progress.classList.remove('visible');
   backTemplates.sort((a, b) => (a.sortHue ?? 500) - (b.sortHue ?? 500));
   if (currentSide === 'back') renderSwatches();

@@ -46,6 +46,75 @@ async function withSignedUrl(row) {
   return { ...row, signedUrl: data.signedUrl };
 }
 
+// POST /api/v1/templates/upload-url
+// Returns a short-lived signed URL so the browser can upload directly to Supabase Storage,
+// bypassing the Render server entirely. File bytes never touch our API.
+// Body: { name, kind, ext }
+// Returns: { signedUploadUrl, path }
+router.post('/upload-url', requireAuth, async (req, res) => {
+  try {
+    const { name, kind, ext } = req.body || {};
+    if (!name || !kind || !ext) {
+      return res.status(400).json({ error: 'name, kind, and ext are required' });
+    }
+    if (!ALLOWED_KINDS.has(kind)) {
+      return res.status(400).json({ error: `kind must be one of: ${[...ALLOWED_KINDS].join(', ')}` });
+    }
+    if (!/^[a-z0-9]{1,8}$/.test(ext)) {
+      return res.status(400).json({ error: 'Invalid file extension' });
+    }
+    const storagePath = `${req.user.id}/${kind}/${crypto.randomUUID()}.${ext}`;
+    const { data, error } = await serviceClient.storage.from(BUCKET).createSignedUploadUrl(storagePath);
+    if (error) {
+      return res.status(500).json({ error: 'Could not create upload URL', detail: error.message });
+    }
+    return res.status(200).json({ signedUploadUrl: data.signedUrl, path: storagePath });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/v1/templates/register
+// Called after a direct browser-to-Supabase upload. Records the template in the DB.
+// Body: { name, kind, sortHue, path }
+// Returns: { template }
+router.post('/register', requireAuth, async (req, res) => {
+  try {
+    const { name, kind, path: storagePath, sortHue: sortHueRaw } = req.body || {};
+    if (!name || !kind || !storagePath) {
+      return res.status(400).json({ error: 'name, kind, and path are required' });
+    }
+    if (!ALLOWED_KINDS.has(kind)) {
+      return res.status(400).json({ error: `kind must be one of: ${[...ALLOWED_KINDS].join(', ')}` });
+    }
+    // Enforce that the path belongs to this user.
+    if (!storagePath.startsWith(`${req.user.id}/`)) {
+      return res.status(403).json({ error: 'Storage path does not belong to this user' });
+    }
+    const sortHue = sortHueRaw !== undefined && sortHueRaw !== '' && sortHueRaw !== null
+      ? Number(sortHueRaw) : null;
+    const db = userClientFor(req.jwt);
+    const insert = await db
+      .from('templates')
+      .insert({
+        user_id: req.user.id,
+        name,
+        kind,
+        storage_path: storagePath,
+        sort_hue: Number.isFinite(sortHue) ? sortHue : null
+      })
+      .select()
+      .single();
+    if (insert.error) {
+      return res.status(500).json({ error: 'Database insert failed', detail: insert.error.message });
+    }
+    const enriched = await withSignedUrl(insert.data);
+    return res.status(201).json({ template: enriched });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/v1/templates
 // Multipart form-data fields:
 //   name      (string, required)  — display name, e.g. "Heather Aqua"
