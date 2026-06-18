@@ -109,6 +109,23 @@ body { font-family: 'Inter', system-ui, sans-serif; height: 100vh; overflow: hid
 .side-btn.active { background: var(--surface-3); color: var(--text); }
 
 /* ── Auth overlay ── */
+#connectingOverlay {
+  position: fixed; inset: 0; z-index: 9999;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg);
+}
+#connectingOverlay.hidden { display: none; }
+.connecting-card {
+  display: flex; flex-direction: column; align-items: center; gap: 16px;
+}
+.connecting-card .brand { font-size: 24px; }
+.connecting-card span:last-child { color: var(--text-3); font-size: 13px; }
+.connecting-spinner {
+  width: 28px; height: 28px; border-radius: 50%;
+  border: 3px solid var(--border); border-top-color: var(--accent);
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 #authOverlay {
   position: fixed; inset: 0; z-index: 9999;
   display: flex; align-items: center; justify-content: center;
@@ -320,7 +337,14 @@ body { font-family: 'Inter', system-ui, sans-serif; height: 100vh; overflow: hid
 <body>
 
 <!-- Auth overlay — covers the app until the user is authenticated -->
-<div id="authOverlay">
+<div id="connectingOverlay">
+  <div class="connecting-card">
+    <span class="brand">MockBloom</span>
+    <div class="connecting-spinner"></div>
+    <span id="connectingMsg">Connecting…</span>
+  </div>
+</div>
+<div id="authOverlay" style="display:none">
   <form id="authForm" class="auth-card">
     <span class="brand">MockBloom</span>
     <span class="auth-sub">Sign in to continue</span>
@@ -1964,8 +1988,10 @@ const authOverlay = document.getElementById('authOverlay');
 const authForm = document.getElementById('authForm');
 const authError = document.getElementById('authError');
 
-function showAuthOverlay() { authOverlay.style.display = 'flex'; }
-function hideAuthOverlay() { authOverlay.style.display = 'none'; }
+const connectingOverlay = document.getElementById('connectingOverlay');
+const connectingMsg = document.getElementById('connectingMsg');
+function showAuthOverlay() { connectingOverlay.classList.add('hidden'); authOverlay.style.display = 'flex'; }
+function hideAuthOverlay() { connectingOverlay.classList.add('hidden'); authOverlay.style.display = 'none'; }
 
 authForm.addEventListener('submit', async e => {
   e.preventDefault();
@@ -1988,25 +2014,34 @@ authForm.addEventListener('submit', async e => {
   }
 });
 
-// Boot: ping the server first (wakes Render free-tier from sleep), then load if we have a token.
-// Only clear the token on 401 — network errors should not force re-login.
 (async () => {
-  // Fire-and-forget wake ping so the server is warm before init() hits it.
-  fetch(`${API_BASE.replace('/api/v1', '')}/`).catch(() => {});
-
   if (!authToken()) { showAuthOverlay(); return; }
-  try {
-    await init();
-    hideAuthOverlay();
-  } catch (err) {
-    if (err.status === 401) {
-      setAuthToken(null);
-      showAuthOverlay();
-    } else {
-      showAuthOverlay();
-      authError.textContent = 'Could not reach server. Check your connection and try again.';
+
+  // Retry init() up to 4 times — Render free tier can take ~30s to cold-start.
+  const delays = [0, 8000, 12000, 15000];
+  for (let i = 0; i < delays.length; i++) {
+    if (delays[i]) {
+      connectingMsg.textContent = `Waking up server… (${i}/${delays.length - 1})`;
+      await new Promise(r => setTimeout(r, delays[i]));
+    }
+    try {
+      connectingMsg.textContent = 'Connecting…';
+      await init();
+      hideAuthOverlay();
+      return;
+    } catch (err) {
+      if (err.status === 401) {
+        setAuthToken(null);
+        showAuthOverlay();
+        return;
+      }
+      // Network error — loop and retry
     }
   }
+
+  // All retries exhausted — show login screen without clearing the token.
+  showAuthOverlay();
+  authError.textContent = 'Server is unavailable. Please try again in a moment.';
 })();
 </script>
 </body>
